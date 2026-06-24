@@ -18,6 +18,7 @@ function writeSession(dir, sid, opts = {}) {
   const lines = [];
   const u = { type: "user", sessionId: sid, message: { role: "user", content: opts.prompt || "hi" } };
   if (opts.ts) u.timestamp = opts.ts;
+  if (opts.cwd) u.cwd = opts.cwd;
   lines.push(JSON.stringify(u));
   if (opts.assistant) lines.push(JSON.stringify({ type: "assistant",
     message: { role: "assistant", model: "claude-opus-4-8", content: [{ type: "text", text: "답변" }] } }));
@@ -28,13 +29,14 @@ function writeSession(dir, sid, opts = {}) {
 
 test("parseSession extracts metadata", () => {
   const d = tmp();
-  const p = writeSession(d, "s1", { title: "내 세션", prompt: "안녕 첫 질문", assistant: true });
+  const p = writeSession(d, "s1", { title: "내 세션", prompt: "안녕 첫 질문", assistant: true, cwd: "C:\\proj\\x" });
   const r = indexer.parseSession(p);
   assert.equal(r.session_id, "s1");
   assert.equal(r.title, "내 세션");
   assert.equal(r.first_prompt, "안녕 첫 질문");
   assert.equal(r.msg_count, 2);
   assert.equal(r.model, "claude-opus-4-8");
+  assert.equal(r.cwd, "C:\\proj\\x");
 });
 
 test("buildIndex excludes agent-* and _trash, prunes deleted", () => {

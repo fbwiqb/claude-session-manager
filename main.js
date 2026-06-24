@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
+const fs = require("fs");
 const { spawn } = require("child_process");
 const paths = require("./lib/paths");
 const indexer = require("./lib/indexer");
@@ -47,14 +48,25 @@ function listSessions(o) {
   return { sessions: rows, total, shown: rows.length, projects };
 }
 
-function openInCmd(sid) {
+function spawnNewCmd(sid, opts) {
+  spawn("cmd.exe", ["/c", "start", "", "cmd", "/k", "claude", "-r", sid],
+    Object.assign({ detached: true, stdio: "ignore" }, opts)).unref();
+}
+
+function openInCmd(sid, cwd) {
   if (!store.isValidSid(sid)) return { ok: false, message: "invalid session id" };
+  const dir = cwd && fs.existsSync(cwd) ? cwd : undefined;
+  const opts = dir ? { cwd: dir } : {};
   try {
     if (process.platform === "win32") {
-      spawn("cmd.exe", ["/c", "start", "", "cmd", "/k", "claude", "-r", sid],
-        { detached: true, stdio: "ignore" }).unref();
+      const wtArgs = ["-w", "0", "nt", "--title", sid];
+      if (dir) wtArgs.push("-d", dir);
+      wtArgs.push("cmd", "/k", "claude", "-r", sid);
+      const wt = spawn("wt.exe", wtArgs, Object.assign({ detached: true, stdio: "ignore" }, opts));
+      wt.on("error", () => { try { spawnNewCmd(sid, opts); } catch (e) {} });
+      wt.unref();
     } else {
-      spawn("claude", ["-r", sid], { detached: true, stdio: "ignore" }).unref();
+      spawn("claude", ["-r", sid], Object.assign({ detached: true, stdio: "ignore" }, opts)).unref();
     }
     return { ok: true };
   } catch (e) {
@@ -111,7 +123,10 @@ function register() {
     return { deleted: delIds.size, candidates: cands.length };
   });
   ipcMain.handle("trash", () => ({ items: store.listTrash(paths.trashMeta()) }));
-  ipcMain.handle("open", (e, sid) => openInCmd(sid));
+  ipcMain.handle("open", (e, sid) => {
+    const r = bySid(sid);
+    return openInCmd(sid, r && r.cwd);
+  });
 }
 
 function createWindow() {

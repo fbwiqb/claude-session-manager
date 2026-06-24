@@ -26,6 +26,13 @@ button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opaci
 .tool{color:var(--mut);font-size:12px;font-style:italic}
 .title{font-size:16px;font-weight:700;margin-bottom:4px}
 .hint{color:var(--mut);font-size:12px}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:100}
+.mbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;width:380px;max-width:90%}
+#mmsg{margin-bottom:8px}
+#minput{width:100%;margin-bottom:12px}
+.mbtns{display:flex;gap:8px;justify-content:flex-end}
+.mbtns button{padding:6px 14px}
+#mok{border-color:var(--acc)}
 </style></head>
 <body>
 <div id="left">
@@ -49,6 +56,11 @@ button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opaci
   <div id="bodybar"></div>
   <div id="body"></div>
 </div>
+<div id="modal"><div class="mbox">
+  <div id="mmsg"></div>
+  <input id="minput">
+  <div class="mbtns"><button id="mcancel">취소</button><button id="mok">확인</button></div>
+</div></div>
 <script>
 (() => {
 const api=window.api;
@@ -61,6 +73,7 @@ async function load(){
   if(state.trash) return loadTrash();
   const d=await api.list({search:$("#search").value,sort:$("#sort").value,
     project:$("#project").value,favorites:state.fav,cleanup:state.clean});
+  state.sessions=d.sessions;
   const sel=$("#project");
   if(sel.options.length<=1)d.projects.forEach(p=>sel.add(new Option(p,p)));
   $("#count").textContent=`총 ${d.total}개`+(d.total>d.shown?` (상위 ${d.shown}개 표시 — 검색으로 좁히세요)`:"");
@@ -83,6 +96,8 @@ async function loadTrash(){
 
 async function openSession(sid){
   state.sid=sid;
+  const it=(state.sessions||[]).find(s=>s.session_id===sid);
+  state.title=it?it.title:"";
   document.querySelectorAll(".item").forEach(e=>e.classList.toggle("sel",e.dataset.sid===sid));
   const d=await api.transcript(sid);
   state.msgs=d.messages;
@@ -104,16 +119,28 @@ function renderBodyBar(){
 }
 
 function renderBody(){
-  const list=state.showAll?state.msgs:state.msgs.filter(m=>m.human);
+  let list=state.showAll?state.msgs:state.msgs.filter(m=>m.human);
+  list=list.filter(m=>(m.text||"").trim());
   $("#body").innerHTML=list.map(m=>`<div class="msg ${m.role}">
     <div class="r">${m.role==="user"?"나":"AI"}</div>
-    <div class="x">${esc(m.text)||(m.has_tool?'<span class="tool">[도구 호출]</span>':"")}</div></div>`).join("")
+    <div class="x">${esc(m.text)}</div></div>`).join("")
     ||"<div class='hint'>표시할 메시지가 없어요.</div>";
   $("#body").scrollTop=$("#body").scrollHeight;
 }
 
+function askText(msg,def){
+  return new Promise(res=>{
+    $("#mmsg").textContent=msg;$("#minput").value=def||"";
+    $("#modal").style.display="flex";$("#minput").focus();$("#minput").select();
+    const close=v=>{$("#modal").style.display="none";$("#mok").onclick=null;$("#mcancel").onclick=null;$("#minput").onkeydown=null;res(v);};
+    $("#mok").onclick=()=>close($("#minput").value);
+    $("#mcancel").onclick=()=>close(null);
+    $("#minput").onkeydown=e=>{if(e.key==="Enter")close($("#minput").value);if(e.key==="Escape")close(null);};
+  });
+}
+
 async function fav(){await api.favorite(state.sid);load();}
-async function rename(){const t=prompt("새 이름:");if(t!=null){await api.rename(state.sid,t);load();}}
+async function rename(){const t=await askText("새 이름:",state.title||"");if(t!=null&&t.trim()){await api.rename(state.sid,t.trim());load();}}
 async function del(){if(confirm("휴지통으로 이동할까요?")){const r=await api.remove(state.sid);if(r.ok){load();$("#body").innerHTML="";$("#bodybar").innerHTML="";$("#title").textContent="세션을 선택하세요";}else alert(r.message||"삭제 실패");}}
 async function restore(sid){await api.restore(sid);loadTrash();}
 async function openCmd(){const r=await api.open(state.sid);if(!r.ok)alert(r.message);}
