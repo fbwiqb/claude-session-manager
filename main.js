@@ -44,10 +44,12 @@ function listSessions(o) {
   if (o.favorites) rows = rows.filter((r) => r.favorite);
   if (o.cleanup) rows = rows.filter((r) => r.cleanup);
   const sort = o.sort || "recent";
-  rows.sort((a, b) =>
-    sort === "name" ? (a.title || "").localeCompare(b.title || "")
-      : sort === "activity" ? (b.msg_count - a.msg_count)
-        : ((b.last_activity || 0) - (a.last_activity || 0)));
+  rows.sort((a, b) => {
+    if (sort === "name") return (a.title || "").localeCompare(b.title || "");
+    if (sort === "msg_desc") return b.msg_count - a.msg_count;
+    if (sort === "msg_asc") return a.msg_count - b.msg_count;
+    return (b.last_activity || 0) - (a.last_activity || 0);
+  });
   const total = rows.length;
   rows = rows.slice(0, 200);
   const projects = [...new Set(INDEX.map((r) => r.project))].sort();
@@ -131,6 +133,20 @@ function register() {
     }
     INDEX = INDEX.filter((r) => !delIds.has(r.session_id));
     return { deleted: delIds.size, candidates: cands.length };
+  });
+  ipcMain.handle("delete-many", (e, sids) => {
+    const running = indexer.runningSessions(paths.sessionsDir());
+    const del = new Set();
+    let skipped = 0;
+    for (const sid of sids || []) {
+      if (running[sid]) { skipped++; continue; }
+      const r = bySid(sid);
+      if (r && store.deleteSession(r.file_path, sid, paths.trashDir(), paths.trashMeta())) {
+        del.add(sid);
+      } else skipped++;
+    }
+    INDEX = INDEX.filter((r) => !del.has(r.session_id));
+    return { deleted: del.size, skipped };
   });
   ipcMain.handle("trash", () => ({ items: store.listTrash(paths.trashMeta()) }));
   ipcMain.handle("open", (e, sid) => {

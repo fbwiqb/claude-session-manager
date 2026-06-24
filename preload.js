@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("api", {
   favorite: (sid) => ipcRenderer.invoke("favorite", sid),
   rename: (sid, title) => ipcRenderer.invoke("rename", { sid, title }),
   remove: (sid) => ipcRenderer.invoke("delete", sid),
+  deleteMany: (sids) => ipcRenderer.invoke("delete-many", sids),
   restore: (sid) => ipcRenderer.invoke("restore", sid),
   cleanupDelete: () => ipcRenderer.invoke("cleanup-delete"),
   open: (sid) => ipcRenderer.invoke("open", sid),

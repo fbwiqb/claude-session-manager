@@ -11,9 +11,14 @@ input,select,button{background:var(--panel);color:var(--fg);border:1px solid var
 button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opacity:.5;cursor:default}
 #search{flex:1;min-width:120px}
 #count{padding:5px 10px;color:var(--mut);font-size:12px;border-bottom:1px solid var(--line)}
+#selbar{padding:6px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}
+#selbar:empty{display:none}
+#selbar button{padding:4px 10px;font-size:12px}
 #list{overflow:auto;flex:1}
-.item{padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}
-.item:hover{background:#161922}.item.sel{background:#202430;border-left:3px solid var(--acc)}
+.item{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:flex-start}
+.item:hover{background:#161922}.item.sel{background:#202430}
+.chk{margin-top:3px;flex:none;cursor:pointer}
+.itxt{flex:1;min-width:0;cursor:pointer}
 .item .t{font-weight:600}.item .m{color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badge{font-size:11px;padding:1px 6px;border-radius:10px;margin-left:6px}
 .b-clean{background:var(--warn);color:#000}.b-fav{color:var(--warn)}.b-run{background:#2a8f5a;color:#fff}
@@ -38,7 +43,7 @@ button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opaci
 <div id="left">
   <div id="bar">
     <input id="search" placeholder="검색 (이름·첫 질문)">
-    <select id="sort"><option value="recent">최근순</option><option value="name">이름순</option><option value="activity">활동량순</option></select>
+    <select id="sort"><option value="recent">최근순</option><option value="name">이름순</option><option value="msg_asc">대화수 적은순</option><option value="msg_desc">대화수 많은순</option></select>
     <select id="project"><option value="">전체 프로젝트</option></select>
     <button id="favBtn">⭐</button>
     <button id="cleanBtn">🧹정리추천</button>
@@ -47,6 +52,7 @@ button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opaci
     <button id="refreshBtn">🔄</button>
   </div>
   <div id="count"></div>
+  <div id="selbar"></div>
   <div id="list"></div>
 </div>
 <div id="right">
@@ -64,7 +70,7 @@ button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opaci
 <script>
 (() => {
 const api=window.api;
-let state={sid:null,fav:false,clean:false,trash:false,showAll:false,msgs:[]};
+let state={sid:null,fav:false,clean:false,trash:false,showAll:false,msgs:[],selected:new Set(),sessions:[]};
 const $=s=>document.querySelector(s);
 function esc(t){return (t||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
 function fmt(ts){return ts?new Date(ts*1000).toLocaleString("ko"):"";}
@@ -78,15 +84,43 @@ async function load(){
   if(sel.options.length<=1)d.projects.forEach(p=>sel.add(new Option(p,p)));
   $("#count").textContent=`총 ${d.total}개`+(d.total>d.shown?` (상위 ${d.shown}개 표시 — 검색으로 좁히세요)`:"");
   $("#list").innerHTML=d.sessions.map(s=>`<div class="item" data-sid="${s.session_id}">
-    <div class="t">${s.favorite?'<span class="b-fav">⭐</span>':''}${esc(s.title)||'<span style="color:#666">(이름없음)</span>'}
-      ${s.running?'<span class="badge b-run">●실행중</span>':''}${s.cleanup?'<span class="badge b-clean">정리</span>':''}</div>
-    <div class="m">${fmt(s.last_activity)} · ${esc(s.project)} · ${s.msg_count}msg · ${esc(s.first_prompt).slice(0,60)}</div>
+    <input type="checkbox" class="chk" data-sid="${s.session_id}">
+    <div class="itxt">
+      <div class="t">${s.favorite?'<span class="b-fav">⭐</span>':''}${esc(s.title)||'<span style="color:#666">(이름없음)</span>'}
+        ${s.running?'<span class="badge b-run">●실행중</span>':''}${s.cleanup?'<span class="badge b-clean">정리</span>':''}</div>
+      <div class="m">${fmt(s.last_activity)} · ${esc(s.project)} · ${s.msg_count}msg · ${esc(s.first_prompt).slice(0,60)}</div>
+    </div>
   </div>`).join("")||"<div style='padding:16px;color:#666'>세션 없음</div>";
-  document.querySelectorAll(".item").forEach(e=>e.onclick=()=>openSession(e.dataset.sid));
+  document.querySelectorAll(".itxt").forEach(e=>e.onclick=()=>openSession(e.parentElement.dataset.sid));
+  document.querySelectorAll(".chk").forEach(c=>{
+    c.checked=state.selected.has(c.dataset.sid);
+    c.onchange=()=>{c.checked?state.selected.add(c.dataset.sid):state.selected.delete(c.dataset.sid);updateSel();};
+  });
+  updateSel();
+}
+
+function updateSel(){
+  const n=state.selected.size;
+  $("#selbar").innerHTML=`<button id="selAll">현재목록 전체선택</button>`
+    +(n?` <span>선택 ${n}개</span> <button id="selDel">🗑️ 선택삭제</button> <button id="selClr">해제</button>`:"");
+  $("#selAll").onclick=()=>{(state.sessions||[]).forEach(s=>state.selected.add(s.session_id));load();};
+  if(n){
+    $("#selDel").onclick=selDelete;
+    $("#selClr").onclick=()=>{state.selected.clear();load();};
+  }
+}
+async function selDelete(){
+  const n=state.selected.size;
+  if(!confirm(`선택한 ${n}개를 휴지통으로 이동할까요? (복원 가능, 실행중 세션은 제외)`))return;
+  const r=await api.deleteMany([...state.selected]);
+  state.selected.clear();
+  alert(`${r.deleted}개 휴지통으로 이동`+(r.skipped?` (${r.skipped}개 건너뜀 — 실행중/잠금)`:""));
+  load();
 }
 
 async function loadTrash(){
   const d=await api.trash();
+  $("#selbar").innerHTML="";
   $("#count").textContent=`휴지통 ${d.items.length}개`;
   $("#list").innerHTML=d.items.map(i=>`<div class="item">
     <div class="t">${esc(i.session_id)}</div><div class="m">삭제: ${fmt(i.deleted_at)}</div>
