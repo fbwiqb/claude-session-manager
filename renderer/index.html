@@ -144,7 +144,7 @@ async function openSession(sid){
   $("#acts").innerHTML=`<button id="aFav">⭐즐겨찾기</button>
     ${codexS?"":'<button id="aRen">✏️리네임</button>'}
     <button id="aOpen">▶️${codexS?"터미널":"cmd"}에서 열기</button>
-    ${codexS?"":'<button id="aApp">🖥️앱으로 열기</button>'}
+    ${codexS?"":'<button id="aApp" title="데스크톱앱에 새 세션으로 복사 import됩니다(이름 미유지). 이어서 작업하려면 cmd에서 열기 권장">🖥️앱으로 가져오기(복사)</button>'}
     ${codexS?"":'<button id="aDel">🗑️삭제</button>'}`;
   $("#aFav").onclick=fav;$("#aOpen").onclick=openCmd;
   if(!codexS){$("#aRen").onclick=rename;$("#aApp").onclick=openApp;$("#aDel").onclick=del;}
