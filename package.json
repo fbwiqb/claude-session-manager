@@ -33,7 +33,8 @@
     "publish": {
       "provider": "github",
       "owner": "fbwiqb",
-      "repo": "claude-session-manager"
+      "repo": "claude-session-manager",
+      "releaseType": "release"
     },
     "win": {
       "icon": "build/icon.ico",
