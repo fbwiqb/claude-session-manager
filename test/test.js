@@ -139,4 +139,15 @@ test("cleanup candidate logic", () => {
   assert.equal(cleanup.isCleanupCandidate(base(), new Set(["x"]), NOW), false);
 });
 
+test("runningSessions reads lock files", () => {
+  const d = tmp();
+  fs.writeFileSync(path.join(d, "111.json"),
+    JSON.stringify({ pid: 111, sessionId: "s1", name: "실행중세션" }));
+  fs.writeFileSync(path.join(d, "bad.txt"), "ignore");
+  const m = indexer.runningSessions(d);
+  assert.equal(m["s1"].name, "실행중세션");
+  assert.equal(m["s1"].pid, 111);
+  assert.equal(indexer.runningSessions(path.join(d, "nope")) && Object.keys(indexer.runningSessions(path.join(d, "nope"))).length, 0);
+});
+
 console.log(`\n${pass} passed`);

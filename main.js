@@ -22,12 +22,18 @@ function bySid(sid) {
 function listSessions(o) {
   o = o || {};
   const favs = store.loadFavorites(paths.favPath());
+  const running = indexer.runningSessions(paths.sessionsDir());
   const now = Date.now() / 1000;
-  let rows = INDEX.map((r) => ({
-    ...r,
-    favorite: favs.has(r.session_id),
-    cleanup: cleanup.isCleanupCandidate(r, favs, now),
-  }));
+  let rows = INDEX.map((r) => {
+    const rn = running[r.session_id];
+    return {
+      ...r,
+      favorite: favs.has(r.session_id),
+      cleanup: cleanup.isCleanupCandidate(r, favs, now),
+      running: !!rn,
+      title: rn && rn.name ? rn.name : r.title,
+    };
+  });
   const search = (o.search || "").toLowerCase();
   if (search) {
     rows = rows.filter((r) =>
@@ -85,6 +91,10 @@ function register() {
   ipcMain.handle("favorite", (e, sid) =>
     ({ favorite: store.toggleFavorite(paths.favPath(), sid) }));
   ipcMain.handle("rename", (e, { sid, title }) => {
+    const running = indexer.runningSessions(paths.sessionsDir());
+    if (running[sid]) {
+      return { ok: false, message: "지금 실행 중인 세션이라 이름이 유지되지 않아요.\n그 세션 창에서 바꾸거나, 세션을 닫은 뒤 다시 시도하세요." };
+    }
     const r = bySid(sid);
     if (r) {
       store.renameSession(r.file_path, sid, title);
