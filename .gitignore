@@ -1,0 +1,8 @@
+_trash/
+csm-index.db
+csm-fav.json
+csm-trash.json
+build/
+dist/
+__pycache__/
+*.spec
