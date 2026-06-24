@@ -72,10 +72,13 @@ def restore_session(sid, trash_dir, meta_path):
         return False
     src = os.path.join(trash_dir, os.path.basename(sid) + ".jsonl")
     os.makedirs(os.path.dirname(dest), exist_ok=True)
-    shutil.move(src, dest)
+    try:
+        shutil.move(src, dest)
+    except (OSError, PermissionError):
+        return False
     del meta[sid]
     _save_trash_meta(meta_path, meta)
-    return True
+    return dest
 
 def list_trash(meta_path):
     return sorted(_load_trash_meta(meta_path).values(),

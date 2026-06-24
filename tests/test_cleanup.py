@@ -17,8 +17,8 @@ class TestCleanup(unittest.TestCase):
         self.assertFalse(is_cleanup_candidate(
             self.base(last_activity=NOW - 5 * DAY), set(), NOW))
 
-    def test_long_not_candidate(self):
-        self.assertFalse(is_cleanup_candidate(self.base(msg_count=20), set(), NOW))
+    def test_long_old_unnamed_is_candidate(self):
+        self.assertTrue(is_cleanup_candidate(self.base(msg_count=20), set(), NOW))
 
     def test_named_not_candidate(self):
         self.assertFalse(is_cleanup_candidate(self.base(title="중요"), set(), NOW))

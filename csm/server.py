@@ -77,14 +77,15 @@ def make_server(cfg, port=8765):
                     rows = [r for r in rows if r["favorite"]]
                 if q.get("cleanup", ["0"])[0] == "1":
                     rows = [r for r in rows if r["cleanup"]]
-                projects = sorted({r["project"] for r in
-                                   indexer.query_sessions(cfg["db"])})
-                return self._json({"sessions": rows, "projects": projects})
+                total = len(rows)
+                rows = rows[:200]
+                return self._json({"sessions": rows, "total": total,
+                                   "shown": len(rows),
+                                   "projects": indexer.list_projects(cfg["db"])})
             if u.path == "/api/transcript":
                 sid = q.get("sid", [""])[0]
-                rows = indexer.query_sessions(cfg["db"])
-                fp = next((r["file_path"] for r in rows
-                           if r["session_id"] == sid), None)
+                row = indexer.get_session(cfg["db"], sid)
+                fp = row["file_path"] if row else None
                 if not fp or not os.path.exists(fp):
                     return self._json({"messages": []}, 404)
                 return self._json({"messages": transcript.load_transcript(fp)})
@@ -101,27 +102,40 @@ def make_server(cfg, port=8765):
             if u.path == "/api/open":
                 ok, msg = _open_in_cmd(sid)
                 return self._json({"ok": ok, "message": msg})
-            rows = indexer.query_sessions(cfg["db"])
-            fp = next((r["file_path"] for r in rows if r["session_id"] == sid), None)
             if u.path == "/api/favorite":
                 added = store.toggle_favorite(cfg["fav"], sid)
                 return self._json({"favorite": added})
+            row = indexer.get_session(cfg["db"], sid)
+            fp = row["file_path"] if row else None
             if u.path == "/api/rename":
                 if fp:
                     store.rename_session(fp, sid, data.get("title", ""))
-                    indexer.build_index(cfg["projects_dir"], cfg["db"])
+                    indexer.index_one(cfg["db"], cfg["projects_dir"], fp)
                 return self._json({"ok": bool(fp)})
             if u.path == "/api/delete":
                 ok = bool(fp) and bool(store.delete_session(
                     fp, sid, cfg["trash_dir"], cfg["trash_meta"]))
                 if ok:
-                    indexer.build_index(cfg["projects_dir"], cfg["db"])
+                    indexer.delete_one(cfg["db"], sid)
                 msg = "" if ok else "삭제 실패 (세션이 실행 중이거나 잠겨 있을 수 있어요)"
                 return self._json({"ok": ok, "message": msg})
             if u.path == "/api/restore":
-                ok = store.restore_session(sid, cfg["trash_dir"], cfg["trash_meta"])
-                indexer.build_index(cfg["projects_dir"], cfg["db"])
-                return self._json({"ok": ok})
+                dest = store.restore_session(sid, cfg["trash_dir"], cfg["trash_meta"])
+                if dest:
+                    indexer.index_one(cfg["db"], cfg["projects_dir"], dest)
+                return self._json({"ok": bool(dest)})
+            if u.path == "/api/cleanup-delete":
+                favs = store.load_favorites(cfg["fav"])
+                now = time.time()
+                cands = [r for r in indexer.query_sessions(cfg["db"])
+                         if cleanup.is_cleanup_candidate(r, favs, now)]
+                deleted = 0
+                for r in cands:
+                    if store.delete_session(r["file_path"], r["session_id"],
+                                            cfg["trash_dir"], cfg["trash_meta"]):
+                        indexer.delete_one(cfg["db"], r["session_id"])
+                        deleted += 1
+                return self._json({"deleted": deleted, "candidates": len(cands)})
             return self._json({"error": "unknown"}, 404)
 
         def _serve_static(self, path):

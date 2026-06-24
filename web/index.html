@@ -10,6 +10,7 @@
 input,select,button{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
 button{cursor:pointer}button:hover{border-color:var(--acc)}
 #search{flex:1;min-width:120px}
+#count{padding:5px 10px;color:var(--mut);font-size:12px;border-bottom:1px solid var(--line)}
 #list{overflow:auto;flex:1}
 .item{padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}
 .item:hover{background:#161922}.item.sel{background:#20243030;border-left:3px solid var(--acc)}
@@ -33,8 +34,10 @@ button{cursor:pointer}button:hover{border-color:var(--acc)}
     <select id="project"><option value="">전체 프로젝트</option></select>
     <button id="favBtn">⭐</button>
     <button id="cleanBtn">🧹정리추천</button>
+    <button id="cleanDelBtn" title="30일 이상 + 이름없는 세션을 전부 휴지통으로">🧹일괄삭제</button>
     <button id="trashBtn">🗑️휴지통</button>
   </div>
+  <div id="count"></div>
   <div id="list"></div>
 </div>
 <div id="right">
@@ -54,6 +57,7 @@ async function load(){
   const d=await(await fetch("/api/list?"+p)).json();
   const sel=$("#project");
   if(sel.options.length<=1)d.projects.forEach(p=>sel.add(new Option(p,p)));
+  $("#count").textContent=`총 ${d.total}개`+(d.total>d.shown?` (상위 ${d.shown}개 표시 — 검색으로 좁히세요)`:"");
   $("#list").innerHTML=d.sessions.map(s=>`<div class="item" data-sid="${s.session_id}">
     <div class="t">${s.favorite?'<span class="b-fav">⭐</span>':''}${esc(s.title)||'<span style="color:#666">(이름없음)</span>'}
       ${s.cleanup?'<span class="badge b-clean">정리</span>':''}</div>
@@ -86,9 +90,19 @@ async function rename(){const t=prompt("새 이름:");if(t!=null){await post("/a
 async function del(){if(confirm("휴지통으로 이동할까요?")){const r=await post("/api/delete",{sid:state.sid});if(r.ok){load();$("#body").innerHTML="";}else{alert(r.message||"삭제 실패");}}}
 async function restore(sid){await post("/api/restore",{sid});loadTrash();}
 async function openCmd(){const r=await post("/api/open",{sid:state.sid});if(!r.ok)alert(r.message);}
-$("#search").oninput=load;$("#sort").onchange=load;$("#project").onchange=load;
+async function cleanDelete(){
+  if(!confirm("30일 이상 + 이름없는 추천 세션을 전부 휴지통으로 이동할까요?\n(즐겨찾기는 제외, 휴지통에서 복원 가능)")) return;
+  $("#cleanDelBtn").disabled=true;$("#cleanDelBtn").textContent="삭제 중…";
+  const r=await post("/api/cleanup-delete",{});
+  $("#cleanDelBtn").disabled=false;$("#cleanDelBtn").textContent="🧹일괄삭제";
+  alert(`${r.deleted}개를 휴지통으로 이동했어요 (후보 ${r.candidates}개).`);
+  load();
+}
+let _t;function debounced(){clearTimeout(_t);_t=setTimeout(load,250);}
+$("#search").oninput=debounced;$("#sort").onchange=load;$("#project").onchange=load;
 $("#favBtn").onclick=()=>{state.fav=!state.fav;$("#favBtn").style.borderColor=state.fav?'#e0a030':'';load();};
-$("#cleanBtn").onclick=()=>{state.clean=!state.clean;load();};
+$("#cleanBtn").onclick=()=>{state.clean=!state.clean;$("#cleanBtn").style.borderColor=state.clean?'#e0a030':'';load();};
+$("#cleanDelBtn").onclick=cleanDelete;
 $("#trashBtn").onclick=()=>{state.trash=!state.trash;load();};
 load();
 </script></body></html>

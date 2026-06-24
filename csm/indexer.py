@@ -90,6 +90,15 @@ def _project_of(projects_dir, file_path):
     rel = os.path.relpath(file_path, projects_dir)
     return rel.split(os.sep)[0]
 
+def _upsert(cur, r):
+    cur.execute("""INSERT OR REPLACE INTO sessions
+        (session_id, project, file_path, mtime, title, first_prompt,
+         msg_count, size_bytes, model, last_activity)
+        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+        (r["session_id"], r["project"], r["file_path"], r["mtime"],
+         r["title"], r["first_prompt"], r["msg_count"], r["size_bytes"],
+         r["model"], r["last_activity"]))
+
 def build_index(projects_dir, db_path, progress=None):
     conn = _connect(db_path)
     cur = conn.cursor()
@@ -97,7 +106,8 @@ def build_index(projects_dir, db_path, progress=None):
         "SELECT session_id, mtime FROM sessions")}
     files = [f for f in glob.glob(os.path.join(projects_dir, "**", "*.jsonl"),
                                   recursive=True)
-             if os.sep + "_trash" + os.sep not in f]
+             if os.sep + "_trash" + os.sep not in f
+             and not os.path.basename(f).startswith("agent-")]
     updated = 0
     for i, fp in enumerate(files):
         sid = os.path.splitext(os.path.basename(fp))[0]
@@ -109,13 +119,7 @@ def build_index(projects_dir, db_path, progress=None):
             continue
         r = parse_session(fp)
         r["project"] = _project_of(projects_dir, fp)
-        cur.execute("""INSERT OR REPLACE INTO sessions
-            (session_id, project, file_path, mtime, title, first_prompt,
-             msg_count, size_bytes, model, last_activity)
-            VALUES (?,?,?,?,?,?,?,?,?,?)""",
-            (r["session_id"], r["project"], r["file_path"], r["mtime"],
-             r["title"], r["first_prompt"], r["msg_count"], r["size_bytes"],
-             r["model"], r["last_activity"]))
+        _upsert(cur, r)
         updated += 1
         if progress and i % 200 == 0:
             progress(i + 1, len(files))
@@ -123,7 +127,7 @@ def build_index(projects_dir, db_path, progress=None):
     conn.close()
     return updated
 
-def query_sessions(db_path, search="", project="", sort="recent"):
+def query_sessions(db_path, search="", project="", sort="recent", limit=None):
     conn = _connect(db_path)
     sql = "SELECT * FROM sessions WHERE 1=1"
     args = []
@@ -137,6 +141,36 @@ def query_sessions(db_path, search="", project="", sort="recent"):
              "name": "title COLLATE NOCASE ASC",
              "activity": "msg_count DESC"}.get(sort, "last_activity DESC")
     sql += " ORDER BY " + order
+    if limit:
+        sql += " LIMIT ?"
+        args.append(limit)
     rows = [dict(r) for r in conn.execute(sql, args)]
     conn.close()
     return rows
+
+def list_projects(db_path):
+    conn = _connect(db_path)
+    rows = [r[0] for r in conn.execute(
+        "SELECT DISTINCT project FROM sessions ORDER BY project")]
+    conn.close()
+    return rows
+
+def get_session(db_path, sid):
+    conn = _connect(db_path)
+    r = conn.execute("SELECT * FROM sessions WHERE session_id=?", (sid,)).fetchone()
+    conn.close()
+    return dict(r) if r else None
+
+def index_one(db_path, projects_dir, file_path):
+    conn = _connect(db_path)
+    r = parse_session(file_path)
+    r["project"] = _project_of(projects_dir, file_path)
+    _upsert(conn.cursor(), r)
+    conn.commit()
+    conn.close()
+
+def delete_one(db_path, sid):
+    conn = _connect(db_path)
+    conn.execute("DELETE FROM sessions WHERE session_id=?", (sid,))
+    conn.commit()
+    conn.close()
