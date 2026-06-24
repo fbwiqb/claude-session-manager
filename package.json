@@ -1,0 +1,21 @@
+{
+  "name": "session-manager",
+  "version": "1.0.0",
+  "description": "클로드 세션 매니저 (Electron)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.cnsa.session-manager",
+    "productName": "세션매니저",
+    "directories": { "output": "release" },
+    "files": ["main.js", "preload.js", "lib/**/*", "renderer/**/*"],
+    "win": { "target": "portable" }
+  }
+}

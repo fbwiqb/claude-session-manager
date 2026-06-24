@@ -1,8 +1,11 @@
 _trash/
 csm-index.db
+csm-index.json
 csm-fav.json
 csm-trash.json
 build/
 dist/
+release/
+node_modules/
 __pycache__/
 *.spec

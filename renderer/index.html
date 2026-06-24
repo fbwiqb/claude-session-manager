@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8">
+<title>클로드 세션 매니저</title>
+<style>
+:root{--bg:#0f1115;--panel:#1a1d24;--line:#2a2e38;--fg:#e6e8ee;--mut:#8b91a0;--acc:#7c5cff;--warn:#e0a030}
+*{box-sizing:border-box}body{margin:0;font:14px/1.5 "Malgun Gothic",sans-serif;background:var(--bg);color:var(--fg);display:flex;height:100vh}
+#left{width:42%;border-right:1px solid var(--line);display:flex;flex-direction:column}
+#right{flex:1;display:flex;flex-direction:column;padding:16px;overflow:hidden}
+#bar{padding:10px;border-bottom:1px solid var(--line);display:flex;gap:6px;flex-wrap:wrap}
+input,select,button{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:13px}
+button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opacity:.5;cursor:default}
+#search{flex:1;min-width:120px}
+#count{padding:5px 10px;color:var(--mut);font-size:12px;border-bottom:1px solid var(--line)}
+#list{overflow:auto;flex:1}
+.item{padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.item:hover{background:#161922}.item.sel{background:#202430;border-left:3px solid var(--acc)}
+.item .t{font-weight:600}.item .m{color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{font-size:11px;padding:1px 6px;border-radius:10px;margin-left:6px}
+.b-clean{background:var(--warn);color:#000}.b-fav{color:var(--warn)}
+#meta{color:var(--mut);font-size:12px;margin-bottom:8px}
+#acts,#bodybar{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center}
+#body{flex:1;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px}
+.msg{margin-bottom:10px}.msg .r{font-size:11px;color:var(--mut)}
+.msg.user .x{border-left:3px solid #4a90d9;padding-left:8px;white-space:pre-wrap}
+.msg.assistant .x{border-left:3px solid var(--acc);padding-left:8px;white-space:pre-wrap}
+.tool{color:var(--mut);font-size:12px;font-style:italic}
+.title{font-size:16px;font-weight:700;margin-bottom:4px}
+.hint{color:var(--mut);font-size:12px}
+</style></head>
+<body>
+<div id="left">
+  <div id="bar">
+    <input id="search" placeholder="검색 (이름·첫 질문)">
+    <select id="sort"><option value="recent">최근순</option><option value="name">이름순</option><option value="activity">활동량순</option></select>
+    <select id="project"><option value="">전체 프로젝트</option></select>
+    <button id="favBtn">⭐</button>
+    <button id="cleanBtn">🧹정리추천</button>
+    <button id="cleanDelBtn" title="30일 이상 + 이름없는 세션을 전부 휴지통으로">🧹일괄삭제</button>
+    <button id="trashBtn">🗑️휴지통</button>
+    <button id="refreshBtn">🔄</button>
+  </div>
+  <div id="count"></div>
+  <div id="list"></div>
+</div>
+<div id="right">
+  <div class="title" id="title">세션을 선택하세요</div>
+  <div id="meta"></div>
+  <div id="acts"></div>
+  <div id="bodybar"></div>
+  <div id="body"></div>
+</div>
+<script>
+const api=window.api;
+let state={sid:null,fav:false,clean:false,trash:false,showAll:false,msgs:[]};
+const $=s=>document.querySelector(s);
+function esc(t){return (t||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
+function fmt(ts){return ts?new Date(ts*1000).toLocaleString("ko"):"";}
+
+async function load(){
+  if(state.trash) return loadTrash();
+  const d=await api.list({search:$("#search").value,sort:$("#sort").value,
+    project:$("#project").value,favorites:state.fav,cleanup:state.clean});
+  const sel=$("#project");
+  if(sel.options.length<=1)d.projects.forEach(p=>sel.add(new Option(p,p)));
+  $("#count").textContent=`총 ${d.total}개`+(d.total>d.shown?` (상위 ${d.shown}개 표시 — 검색으로 좁히세요)`:"");
+  $("#list").innerHTML=d.sessions.map(s=>`<div class="item" data-sid="${s.session_id}">
+    <div class="t">${s.favorite?'<span class="b-fav">⭐</span>':''}${esc(s.title)||'<span style="color:#666">(이름없음)</span>'}
+      ${s.cleanup?'<span class="badge b-clean">정리</span>':''}</div>
+    <div class="m">${fmt(s.last_activity)} · ${esc(s.project)} · ${s.msg_count}msg · ${esc(s.first_prompt).slice(0,60)}</div>
+  </div>`).join("")||"<div style='padding:16px;color:#666'>세션 없음</div>";
+  document.querySelectorAll(".item").forEach(e=>e.onclick=()=>openSession(e.dataset.sid));
+}
+
+async function loadTrash(){
+  const d=await api.trash();
+  $("#count").textContent=`휴지통 ${d.items.length}개`;
+  $("#list").innerHTML=d.items.map(i=>`<div class="item">
+    <div class="t">${esc(i.session_id)}</div><div class="m">삭제: ${fmt(i.deleted_at)}</div>
+    <button data-r="${i.session_id}">복원</button></div>`).join("")||"<div style='padding:16px;color:#666'>휴지통 비어있음</div>";
+  document.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>restore(b.dataset.r));
+}
+
+async function openSession(sid){
+  state.sid=sid;
+  document.querySelectorAll(".item").forEach(e=>e.classList.toggle("sel",e.dataset.sid===sid));
+  const d=await api.transcript(sid);
+  state.msgs=d.messages;
+  $("#title").textContent=sid;
+  $("#acts").innerHTML=`<button id="aFav">⭐즐겨찾기</button>
+    <button id="aRen">✏️리네임</button>
+    <button id="aOpen">▶️cmd에서 열기</button>
+    <button id="aDel">🗑️삭제</button>`;
+  $("#aFav").onclick=fav;$("#aRen").onclick=rename;$("#aOpen").onclick=openCmd;$("#aDel").onclick=del;
+  renderBodyBar();
+  renderBody();
+}
+
+function renderBodyBar(){
+  const human=state.msgs.filter(m=>m.human).length;
+  $("#bodybar").innerHTML=`<button id="tg">${state.showAll?"전체 보기":"💬 내 채팅만"}</button>
+    <span class="hint">내 메시지 ${human}개 / 전체 ${state.msgs.length}개</span>`;
+  $("#tg").onclick=()=>{state.showAll=!state.showAll;renderBodyBar();renderBody();};
+}
+
+function renderBody(){
+  const list=state.showAll?state.msgs:state.msgs.filter(m=>m.human);
+  $("#body").innerHTML=list.map(m=>`<div class="msg ${m.role}">
+    <div class="r">${m.role==="user"?"나":"AI"}</div>
+    <div class="x">${esc(m.text)||(m.has_tool?'<span class="tool">[도구 호출]</span>':"")}</div></div>`).join("")
+    ||"<div class='hint'>표시할 메시지가 없어요.</div>";
+  $("#body").scrollTop=$("#body").scrollHeight;
+}
+
+async function fav(){await api.favorite(state.sid);load();}
+async function rename(){const t=prompt("새 이름:");if(t!=null){await api.rename(state.sid,t);load();}}
+async function del(){if(confirm("휴지통으로 이동할까요?")){const r=await api.remove(state.sid);if(r.ok){load();$("#body").innerHTML="";$("#bodybar").innerHTML="";$("#title").textContent="세션을 선택하세요";}else alert(r.message||"삭제 실패");}}
+async function restore(sid){await api.restore(sid);loadTrash();}
+async function openCmd(){const r=await api.open(state.sid);if(!r.ok)alert(r.message);}
+async function cleanDelete(){
+  if(!confirm("30일 이상 + 이름없는 추천 세션을 전부 휴지통으로 이동할까요?\n(즐겨찾기는 제외, 휴지통에서 복원 가능)"))return;
+  $("#cleanDelBtn").disabled=true;$("#cleanDelBtn").textContent="삭제 중…";
+  const r=await api.cleanupDelete();
+  $("#cleanDelBtn").disabled=false;$("#cleanDelBtn").textContent="🧹일괄삭제";
+  alert(`${r.deleted}개를 휴지통으로 이동했어요 (후보 ${r.candidates}개).`);
+  load();
+}
+
+let _t;function debounced(){clearTimeout(_t);_t=setTimeout(load,250);}
+$("#search").oninput=debounced;$("#sort").onchange=load;$("#project").onchange=load;
+$("#favBtn").onclick=()=>{state.fav=!state.fav;$("#favBtn").style.borderColor=state.fav?"#e0a030":"";load();};
+$("#cleanBtn").onclick=()=>{state.clean=!state.clean;$("#cleanBtn").style.borderColor=state.clean?"#e0a030":"";load();};
+$("#cleanDelBtn").onclick=cleanDelete;
+$("#trashBtn").onclick=()=>{state.trash=!state.trash;$("#trashBtn").style.borderColor=state.trash?"#e0a030":"";load();};
+$("#refreshBtn").onclick=async()=>{await api.refresh();load();};
+load();
+</script></body></html>

@@ -1,0 +1,138 @@
+const { app, BrowserWindow, ipcMain } = require("electron");
+const path = require("path");
+const { spawn } = require("child_process");
+const paths = require("./lib/paths");
+const indexer = require("./lib/indexer");
+const transcript = require("./lib/transcript");
+const store = require("./lib/store");
+const cleanup = require("./lib/cleanup");
+
+let INDEX = [];
+
+function reindex() {
+  INDEX = indexer.buildIndex(paths.projectsDir(), paths.indexCache());
+  return INDEX;
+}
+
+function bySid(sid) {
+  return INDEX.find((r) => r.session_id === sid);
+}
+
+function listSessions(o) {
+  o = o || {};
+  const favs = store.loadFavorites(paths.favPath());
+  const now = Date.now() / 1000;
+  let rows = INDEX.map((r) => ({
+    ...r,
+    favorite: favs.has(r.session_id),
+    cleanup: cleanup.isCleanupCandidate(r, favs, now),
+  }));
+  const search = (o.search || "").toLowerCase();
+  if (search) {
+    rows = rows.filter((r) =>
+      (r.title || "").toLowerCase().includes(search) ||
+      (r.first_prompt || "").toLowerCase().includes(search));
+  }
+  if (o.project) rows = rows.filter((r) => r.project === o.project);
+  if (o.favorites) rows = rows.filter((r) => r.favorite);
+  if (o.cleanup) rows = rows.filter((r) => r.cleanup);
+  const sort = o.sort || "recent";
+  rows.sort((a, b) =>
+    sort === "name" ? (a.title || "").localeCompare(b.title || "")
+      : sort === "activity" ? (b.msg_count - a.msg_count)
+        : ((b.last_activity || 0) - (a.last_activity || 0)));
+  const total = rows.length;
+  rows = rows.slice(0, 200);
+  const projects = [...new Set(INDEX.map((r) => r.project))].sort();
+  return { sessions: rows, total, shown: rows.length, projects };
+}
+
+function openInCmd(sid) {
+  if (!store.isValidSid(sid)) return { ok: false, message: "invalid session id" };
+  try {
+    if (process.platform === "win32") {
+      spawn("cmd.exe", ["/c", "start", "", "cmd", "/k", "claude", "-r", sid],
+        { detached: true, stdio: "ignore" }).unref();
+    } else {
+      spawn("claude", ["-r", sid], { detached: true, stdio: "ignore" }).unref();
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: String(e) };
+  }
+}
+
+function register() {
+  ipcMain.handle("list", (e, o) => listSessions(o));
+  ipcMain.handle("refresh", () => { reindex(); return listSessions({}); });
+  ipcMain.handle("transcript", (e, sid) => {
+    const r = bySid(sid);
+    if (!r) return { messages: [] };
+    return { messages: transcript.loadTranscript(r.file_path) };
+  });
+  ipcMain.handle("favorite", (e, sid) =>
+    ({ favorite: store.toggleFavorite(paths.favPath(), sid) }));
+  ipcMain.handle("rename", (e, { sid, title }) => {
+    const r = bySid(sid);
+    if (r) {
+      store.renameSession(r.file_path, sid, title);
+      const u = indexer.parseSession(r.file_path);
+      u.project = r.project;
+      Object.assign(r, u);
+    }
+    return { ok: !!r };
+  });
+  ipcMain.handle("delete", (e, sid) => {
+    const r = bySid(sid);
+    const ok = r && store.deleteSession(r.file_path, sid, paths.trashDir(), paths.trashMeta());
+    if (ok) INDEX = INDEX.filter((x) => x.session_id !== sid);
+    return { ok: !!ok, message: ok ? "" : "삭제 실패 (세션이 실행 중이거나 잠겨 있을 수 있어요)" };
+  });
+  ipcMain.handle("restore", (e, sid) => {
+    const dest = store.restoreSession(sid, paths.trashDir(), paths.trashMeta());
+    if (dest) {
+      const u = indexer.parseSession(dest);
+      u.project = indexer.projectOf(paths.projectsDir(), dest);
+      INDEX.push(u);
+    }
+    return { ok: !!dest };
+  });
+  ipcMain.handle("cleanup-delete", () => {
+    const favs = store.loadFavorites(paths.favPath());
+    const now = Date.now() / 1000;
+    const cands = INDEX.filter((r) => cleanup.isCleanupCandidate(r, favs, now));
+    const delIds = new Set();
+    for (const r of cands) {
+      if (store.deleteSession(r.file_path, r.session_id, paths.trashDir(), paths.trashMeta())) {
+        delIds.add(r.session_id);
+      }
+    }
+    INDEX = INDEX.filter((r) => !delIds.has(r.session_id));
+    return { deleted: delIds.size, candidates: cands.length };
+  });
+  ipcMain.handle("trash", () => ({ items: store.listTrash(paths.trashMeta()) }));
+  ipcMain.handle("open", (e, sid) => openInCmd(sid));
+}
+
+function createWindow() {
+  const win = new BrowserWindow({
+    width: 1200, height: 800, title: "세션매니저", backgroundColor: "#0f1115",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true, nodeIntegration: false,
+    },
+  });
+  win.removeMenu();
+  win.loadFile(path.join(__dirname, "renderer", "index.html"));
+}
+
+app.whenReady().then(() => {
+  reindex();
+  register();
+  createWindow();
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+app.on("window-all-closed", () => app.quit());
