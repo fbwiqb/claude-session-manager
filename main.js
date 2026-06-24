@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { spawn } = require("child_process");
@@ -100,6 +100,19 @@ function openInCmd(sid, cwd, source) {
   }
 }
 
+function openInApp(sid, source) {
+  if (source === "codex") {
+    return { ok: false, message: "Codex 세션은 데스크톱앱 열기를 지원하지 않아요.\n(터미널에서 열기를 쓰세요)" };
+  }
+  if (!store.isValidSid(sid)) return { ok: false, message: "invalid session id" };
+  try {
+    shell.openExternal("claude://resume?sessionId=" + encodeURIComponent(sid));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: String(e) };
+  }
+}
+
 function register() {
   ipcMain.handle("list", (e, o) => listSessions(o));
   ipcMain.handle("refresh", () => { reindex(); return listSessions({}); });
@@ -182,6 +195,10 @@ function register() {
     const r = bySid(sid);
     return openInCmd(sid, r && r.cwd, r && r.source);
   });
+  ipcMain.handle("open-app", (e, sid) => {
+    const r = bySid(sid);
+    return openInApp(sid, r && r.source);
+  });
 }
 
 function createWindow() {
@@ -202,10 +219,13 @@ function setupAutoUpdate(win) {
   if (!app.isPackaged || !autoUpdater) return;
   autoUpdater.autoDownload = false;
   autoUpdater.on("update-available", (info) => {
+    let notes = info.releaseNotes;
+    if (Array.isArray(notes)) notes = notes.map((n) => (n && n.note) || "").join("\n\n");
+    notes = (notes || "").toString().replace(/<[^>]+>/g, "").trim();
     dialog.showMessageBox(win, {
       type: "info", title: "업데이트 있음",
       message: "새 버전 " + info.version + "이 있어요.",
-      detail: (info.releaseNotes || "").toString().replace(/<[^>]+>/g, "").slice(0, 600),
+      detail: notes ? "변경 사항:\n\n" + notes.slice(0, 1500) : "(릴리즈 노트 없음)",
       buttons: ["지금 받기", "나중에"], defaultId: 0,
     }).then((r) => { if (r.response === 0) autoUpdater.downloadUpdate(); });
   });

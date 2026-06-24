@@ -25,3 +25,19 @@ jobs:
         run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notes:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set release notes from tag message
+        shell: bash
+        run: |
+          NOTES=$(git tag -l --format='%(contents:body)' "${GITHUB_REF_NAME}")
+          if [ -z "$NOTES" ]; then NOTES=$(git tag -l --format='%(contents)' "${GITHUB_REF_NAME}"); fi
+          gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --draft=false --notes "$NOTES"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

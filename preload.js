@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld("api", {
   restore: (sid) => ipcRenderer.invoke("restore", sid),
   cleanupDelete: () => ipcRenderer.invoke("cleanup-delete"),
   open: (sid) => ipcRenderer.invoke("open", sid),
+  openApp: (sid) => ipcRenderer.invoke("open-app", sid),
   trash: () => ipcRenderer.invoke("trash"),
   refresh: () => ipcRenderer.invoke("refresh"),
 });

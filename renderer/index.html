@@ -143,10 +143,11 @@ async function openSession(sid){
   const codexS=state.curSource==="codex";
   $("#acts").innerHTML=`<button id="aFav">⭐즐겨찾기</button>
     ${codexS?"":'<button id="aRen">✏️리네임</button>'}
-    <button id="aOpen">▶️터미널에서 열기</button>
+    <button id="aOpen">▶️${codexS?"터미널":"cmd"}에서 열기</button>
+    ${codexS?"":'<button id="aApp">🖥️앱으로 열기</button>'}
     ${codexS?"":'<button id="aDel">🗑️삭제</button>'}`;
   $("#aFav").onclick=fav;$("#aOpen").onclick=openCmd;
-  if(!codexS){$("#aRen").onclick=rename;$("#aDel").onclick=del;}
+  if(!codexS){$("#aRen").onclick=rename;$("#aApp").onclick=openApp;$("#aDel").onclick=del;}
   renderBodyBar();
   renderBody();
 }
@@ -184,6 +185,7 @@ async function rename(){const t=await askText("새 이름:",state.title||"");if(
 async function del(){if(confirm("휴지통으로 이동할까요?")){const r=await api.remove(state.sid);if(r.ok){load();$("#body").innerHTML="";$("#bodybar").innerHTML="";$("#title").textContent="세션을 선택하세요";}else alert(r.message||"삭제 실패");}}
 async function restore(sid){await api.restore(sid);loadTrash();}
 async function openCmd(){const r=await api.open(state.sid);if(!r.ok)alert(r.message);}
+async function openApp(){const r=await api.openApp(state.sid);if(!r.ok)alert(r.message);}
 async function cleanDelete(){
   if(!confirm("30일 이상 + 이름없는 추천 세션을 전부 휴지통으로 이동할까요?\n(즐겨찾기는 제외, 휴지통에서 복원 가능)"))return;
   $("#cleanDelBtn").disabled=true;$("#cleanDelBtn").textContent="삭제 중…";
