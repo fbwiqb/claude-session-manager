@@ -106,7 +106,7 @@ function openInApp(sid, source) {
   }
   if (!store.isValidSid(sid)) return { ok: false, message: "invalid session id" };
   try {
-    shell.openExternal("claude://resume?sessionId=" + encodeURIComponent(sid));
+    shell.openExternal("claude://resume?session=" + encodeURIComponent(sid));
     return { ok: true };
   } catch (e) {
     return { ok: false, message: String(e) };
