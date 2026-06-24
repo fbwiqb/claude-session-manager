@@ -5,17 +5,58 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "test": "node test/test.js",
     "dist": "electron-builder"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "com.cnsa.session-manager",
+    "appId": "kr.cnsa.sessionManager",
     "productName": "세션매니저",
-    "directories": { "output": "release" },
-    "files": ["main.js", "preload.js", "lib/**/*", "renderer/**/*"],
-    "win": { "target": "portable" }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**/*",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "fbwiqb",
+      "repo": "claude-session-manager"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "세션매니저",
+      "artifactName": "session-manager-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "session-manager-portable-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools",
+      "artifactName": "session-manager-${version}-${arch}.${ext}"
+    }
   }
 }

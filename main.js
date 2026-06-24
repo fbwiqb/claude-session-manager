@@ -1,7 +1,9 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { spawn } = require("child_process");
+let autoUpdater;
+try { ({ autoUpdater } = require("electron-updater")); } catch (e) {}
 const paths = require("./lib/paths");
 const indexer = require("./lib/indexer");
 const transcript = require("./lib/transcript");
@@ -73,6 +75,12 @@ function openInCmd(sid, cwd) {
       const wt = spawn("wt.exe", wtArgs, Object.assign({ detached: true, stdio: "ignore" }, opts));
       wt.on("error", () => { try { spawnNewCmd(sid, opts); } catch (e) {} });
       wt.unref();
+    } else if (process.platform === "darwin") {
+      const sh = (dir ? "cd '" + dir.replace(/'/g, "'\\''") + "' && " : "") + "claude -r " + sid;
+      const osa = 'tell application "Terminal" to do script "' +
+        sh.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+      spawn("osascript", ["-e", "tell application \"Terminal\" to activate", "-e", osa],
+        { detached: true, stdio: "ignore" }).unref();
     } else {
       spawn("claude", ["-r", sid], Object.assign({ detached: true, stdio: "ignore" }, opts)).unref();
     }
@@ -165,6 +173,29 @@ function createWindow() {
   });
   win.removeMenu();
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
+  setupAutoUpdate(win);
+}
+
+function setupAutoUpdate(win) {
+  if (!app.isPackaged || !autoUpdater) return;
+  autoUpdater.autoDownload = false;
+  autoUpdater.on("update-available", (info) => {
+    dialog.showMessageBox(win, {
+      type: "info", title: "업데이트 있음",
+      message: "새 버전 " + info.version + "이 있어요.",
+      detail: (info.releaseNotes || "").toString().replace(/<[^>]+>/g, "").slice(0, 600),
+      buttons: ["지금 받기", "나중에"], defaultId: 0,
+    }).then((r) => { if (r.response === 0) autoUpdater.downloadUpdate(); });
+  });
+  autoUpdater.on("update-downloaded", () => {
+    dialog.showMessageBox(win, {
+      type: "info", title: "업데이트 준비됨",
+      message: "다운로드 완료. 지금 재시작해서 적용할까요?",
+      buttons: ["재시작", "나중에"], defaultId: 0,
+    }).then((r) => { if (r.response === 0) autoUpdater.quitAndInstall(); });
+  });
+  autoUpdater.on("error", () => {});
+  try { autoUpdater.checkForUpdates(); } catch (e) {}
 }
 
 app.whenReady().then(() => {
