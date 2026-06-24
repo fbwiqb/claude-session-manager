@@ -51,5 +51,24 @@ class TestIndex(unittest.TestCase):
         rows = indexer.query_sessions(self.db)
         self.assertEqual([r["session_id"] for r in rows], ["live"])
 
+    def test_agent_files_excluded(self):
+        p = os.path.join(self.proj, "projA")
+        write_session(p, "agent-abc123")
+        write_session(p, "realone")
+        indexer.build_index(self.proj, self.db)
+        rows = indexer.query_sessions(self.db)
+        self.assertEqual([r["session_id"] for r in rows], ["realone"])
+
+    def test_prunes_deleted_files(self):
+        p = os.path.join(self.proj, "projA")
+        f1 = write_session(p, "s1")
+        write_session(p, "s2")
+        indexer.build_index(self.proj, self.db)
+        self.assertEqual(len(indexer.query_sessions(self.db)), 2)
+        os.remove(f1)
+        indexer.build_index(self.proj, self.db)
+        ids = [r["session_id"] for r in indexer.query_sessions(self.db)]
+        self.assertEqual(ids, ["s2"])
+
 if __name__ == "__main__":
     unittest.main()

@@ -109,12 +109,14 @@ def build_index(projects_dir, db_path, progress=None):
              if os.sep + "_trash" + os.sep not in f
              and not os.path.basename(f).startswith("agent-")]
     updated = 0
+    seen = set()
     for i, fp in enumerate(files):
         sid = os.path.splitext(os.path.basename(fp))[0]
         try:
             mt = os.path.getmtime(fp)
         except OSError:
             continue
+        seen.add(sid)
         if known.get(sid) == mt:
             continue
         r = parse_session(fp)
@@ -123,6 +125,9 @@ def build_index(projects_dir, db_path, progress=None):
         updated += 1
         if progress and i % 200 == 0:
             progress(i + 1, len(files))
+    stale = set(known) - seen
+    for sid in stale:
+        cur.execute("DELETE FROM sessions WHERE session_id=?", (sid,))
     conn.commit()
     conn.close()
     return updated
