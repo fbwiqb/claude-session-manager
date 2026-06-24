@@ -39,21 +39,26 @@ test("parseSession extracts metadata", () => {
   assert.equal(r.cwd, "C:\\proj\\x");
 });
 
-test("buildIndex excludes agent-* and _trash, prunes deleted", () => {
+test("buildIndex: only UUID sessions, excludes agent/journal/subagents/_trash, prunes deleted", () => {
   const root = tmp();
   const proj = path.join(root, "projects", "projA");
   fs.mkdirSync(proj, { recursive: true });
   fs.mkdirSync(path.join(root, "projects", "_trash"), { recursive: true });
-  writeSession(proj, "real1");
-  writeSession(proj, "agent-xyz");
-  writeSession(path.join(root, "projects", "_trash"), "dead");
-  const f2 = writeSession(proj, "real2");
+  const sub = path.join(proj, "11111111-1111-1111-1111-111111111111", "subagents", "workflows", "wf_1");
+  fs.mkdirSync(sub, { recursive: true });
+  const A = "11111111-1111-1111-1111-111111111111";
+  const B = "22222222-2222-2222-2222-222222222222";
+  writeSession(proj, A);
+  writeSession(proj, "agent-aaaaaaaaaaaaaaaa");
+  writeSession(sub, "journal");
+  writeSession(path.join(root, "projects", "_trash"), "33333333-3333-3333-3333-333333333333");
+  const f2 = writeSession(proj, B);
   const cache = path.join(root, "idx.json");
   let rows = indexer.buildIndex(path.join(root, "projects"), cache);
-  assert.deepEqual(rows.map(r => r.session_id).sort(), ["real1", "real2"]);
+  assert.deepEqual(rows.map(r => r.session_id).sort(), [A, B]);
   fs.unlinkSync(f2);
   rows = indexer.buildIndex(path.join(root, "projects"), cache);
-  assert.deepEqual(rows.map(r => r.session_id), ["real1"]);
+  assert.deepEqual(rows.map(r => r.session_id), [A]);
 });
 
 test("loadTranscript flags human vs tool/system", () => {

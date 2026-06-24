@@ -1,6 +1,6 @@
 {
   "name": "session-manager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "클로드 세션 매니저 (Electron)",
   "main": "main.js",
   "scripts": {
@@ -13,11 +13,13 @@
   },
   "devDependencies": {
     "electron": "^33.2.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "rcedit": "^5.0.2"
   },
   "build": {
     "appId": "kr.cnsa.sessionManager",
     "productName": "세션매니저",
+    "afterPack": "build/afterPack.js",
     "directories": {
       "output": "release"
     },
@@ -34,6 +36,7 @@
       "repo": "claude-session-manager"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "portable"
@@ -51,6 +54,7 @@
       "artifactName": "session-manager-portable-${version}.${ext}"
     },
     "mac": {
+      "icon": "build/icon.png",
       "target": [
         "dmg",
         "zip"
