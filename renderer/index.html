@@ -50,6 +50,7 @@ button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opaci
   <div id="body"></div>
 </div>
 <script>
+(() => {
 const api=window.api;
 let state={sid:null,fav:false,clean:false,trash:false,showAll:false,msgs:[]};
 const $=s=>document.querySelector(s);
@@ -133,4 +134,5 @@ $("#cleanDelBtn").onclick=cleanDelete;
 $("#trashBtn").onclick=()=>{state.trash=!state.trash;$("#trashBtn").style.borderColor=state.trash?"#e0a030":"";load();};
 $("#refreshBtn").onclick=async()=>{await api.refresh();load();};
 load();
+})();
 </script></body></html>
