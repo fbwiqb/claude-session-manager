@@ -83,7 +83,7 @@ async function open(sid){
 async function post(url,b){return (await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)})).json();}
 async function fav(){await post("/api/favorite",{sid:state.sid});load();}
 async function rename(){const t=prompt("새 이름:");if(t!=null){await post("/api/rename",{sid:state.sid,title:t});load();}}
-async function del(){if(confirm("휴지통으로 이동할까요?")){await post("/api/delete",{sid:state.sid});load();$("#body").innerHTML="";}}
+async function del(){if(confirm("휴지통으로 이동할까요?")){const r=await post("/api/delete",{sid:state.sid});if(r.ok){load();$("#body").innerHTML="";}else{alert(r.message||"삭제 실패");}}}
 async function restore(sid){await post("/api/restore",{sid});loadTrash();}
 async function openCmd(){const r=await post("/api/open",{sid:state.sid});if(!r.ok)alert(r.message);}
 $("#search").oninput=load;$("#sort").onchange=load;$("#project").onchange=load;

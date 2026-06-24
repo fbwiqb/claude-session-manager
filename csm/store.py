@@ -47,7 +47,10 @@ def delete_session(file_path, sid, trash_dir, meta_path):
         return False
     os.makedirs(trash_dir, exist_ok=True)
     dest = os.path.join(trash_dir, os.path.basename(sid) + ".jsonl")
-    shutil.move(file_path, dest)
+    try:
+        shutil.move(file_path, dest)
+    except (OSError, PermissionError):
+        return False
     meta = _load_trash_meta(meta_path)
     meta[sid] = {"session_id": sid, "origin": file_path, "deleted_at": time.time()}
     _save_trash_meta(meta_path, meta)

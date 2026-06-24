@@ -112,10 +112,12 @@ def make_server(cfg, port=8765):
                     indexer.build_index(cfg["projects_dir"], cfg["db"])
                 return self._json({"ok": bool(fp)})
             if u.path == "/api/delete":
-                if fp:
-                    store.delete_session(fp, sid, cfg["trash_dir"], cfg["trash_meta"])
+                ok = bool(fp) and bool(store.delete_session(
+                    fp, sid, cfg["trash_dir"], cfg["trash_meta"]))
+                if ok:
                     indexer.build_index(cfg["projects_dir"], cfg["db"])
-                return self._json({"ok": bool(fp)})
+                msg = "" if ok else "삭제 실패 (세션이 실행 중이거나 잠겨 있을 수 있어요)"
+                return self._json({"ok": ok, "message": msg})
             if u.path == "/api/restore":
                 ok = store.restore_session(sid, cfg["trash_dir"], cfg["trash_meta"])
                 indexer.build_index(cfg["projects_dir"], cfg["db"])
