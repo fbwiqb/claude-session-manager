@@ -9,16 +9,19 @@ const indexer = require("./lib/indexer");
 const transcript = require("./lib/transcript");
 const store = require("./lib/store");
 const cleanup = require("./lib/cleanup");
+const codex = require("./lib/codex");
 
 let INDEX = [];
+let CODEX = [];
 
 function reindex() {
   INDEX = indexer.buildIndex(paths.projectsDir(), paths.indexCache());
+  try { CODEX = codex.buildCodexIndex(codex.codexHome(), paths.codexIndexCache()); } catch (e) { CODEX = []; }
   return INDEX;
 }
 
 function bySid(sid) {
-  return INDEX.find((r) => r.session_id === sid);
+  return INDEX.find((r) => r.session_id === sid) || CODEX.find((r) => r.session_id === sid);
 }
 
 function listSessions(o) {
@@ -26,7 +29,9 @@ function listSessions(o) {
   const favs = store.loadFavorites(paths.favPath());
   const running = indexer.runningSessions(paths.sessionsDir());
   const now = Date.now() / 1000;
-  let rows = INDEX.map((r) => {
+  const src = o.source || "claude";
+  const baseRows = src === "codex" ? CODEX : src === "all" ? INDEX.concat(CODEX) : INDEX;
+  let rows = baseRows.map((r) => {
     const rn = running[r.session_id];
     return {
       ...r,
@@ -54,35 +59,40 @@ function listSessions(o) {
   });
   const total = rows.length;
   rows = rows.slice(0, 200);
-  const projects = [...new Set(INDEX.map((r) => r.project))].sort();
+  const projects = [...new Set(baseRows.map((r) => r.project))].sort();
   return { sessions: rows, total, shown: rows.length, projects };
 }
 
-function spawnNewCmd(sid, opts) {
-  spawn("cmd.exe", ["/c", "start", "", "cmd", "/k", "claude", "-r", sid],
+function resumeArgs(sid, source) {
+  return source === "codex" ? ["codex", "resume", sid] : ["claude", "-r", sid];
+}
+
+function spawnNewCmd(args, opts) {
+  spawn("cmd.exe", ["/c", "start", "", "cmd", "/k"].concat(args),
     Object.assign({ detached: true, stdio: "ignore" }, opts)).unref();
 }
 
-function openInCmd(sid, cwd) {
+function openInCmd(sid, cwd, source) {
   if (!store.isValidSid(sid)) return { ok: false, message: "invalid session id" };
   const dir = cwd && fs.existsSync(cwd) ? cwd : undefined;
   const opts = dir ? { cwd: dir } : {};
+  const args = resumeArgs(sid, source);
   try {
     if (process.platform === "win32") {
       const wtArgs = ["-w", "0", "nt", "--title", sid];
       if (dir) wtArgs.push("-d", dir);
-      wtArgs.push("cmd", "/k", "claude", "-r", sid);
-      const wt = spawn("wt.exe", wtArgs, Object.assign({ detached: true, stdio: "ignore" }, opts));
-      wt.on("error", () => { try { spawnNewCmd(sid, opts); } catch (e) {} });
+      wtArgs.push("cmd", "/k");
+      const wt = spawn("wt.exe", wtArgs.concat(args), Object.assign({ detached: true, stdio: "ignore" }, opts));
+      wt.on("error", () => { try { spawnNewCmd(args, opts); } catch (e) {} });
       wt.unref();
     } else if (process.platform === "darwin") {
-      const sh = (dir ? "cd '" + dir.replace(/'/g, "'\\''") + "' && " : "") + "claude -r " + sid;
+      const sh = (dir ? "cd '" + dir.replace(/'/g, "'\\''") + "' && " : "") + args.join(" ");
       const osa = 'tell application "Terminal" to do script "' +
         sh.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
       spawn("osascript", ["-e", "tell application \"Terminal\" to activate", "-e", osa],
         { detached: true, stdio: "ignore" }).unref();
     } else {
-      spawn("claude", ["-r", sid], Object.assign({ detached: true, stdio: "ignore" }, opts)).unref();
+      spawn(args[0], args.slice(1), Object.assign({ detached: true, stdio: "ignore" }, opts)).unref();
     }
     return { ok: true };
   } catch (e) {
@@ -95,12 +105,19 @@ function register() {
   ipcMain.handle("refresh", () => { reindex(); return listSessions({}); });
   ipcMain.handle("transcript", (e, sid) => {
     const r = bySid(sid);
-    if (!r) return { messages: [] };
-    return { messages: transcript.loadTranscript(r.file_path) };
+    if (!r || !r.file_path) return { messages: [] };
+    const msgs = r.source === "codex"
+      ? codex.loadCodexTranscript(r.file_path)
+      : transcript.loadTranscript(r.file_path);
+    return { messages: msgs };
   });
   ipcMain.handle("favorite", (e, sid) =>
     ({ favorite: store.toggleFavorite(paths.favPath(), sid) }));
   ipcMain.handle("rename", (e, { sid, title }) => {
+    const cur = bySid(sid);
+    if (cur && cur.source === "codex") {
+      return { ok: false, message: "Codex 세션은 이 앱에서 이름 변경을 지원하지 않아요." };
+    }
     const running = indexer.runningSessions(paths.sessionsDir());
     if (running[sid]) {
       return { ok: false, message: "지금 실행 중인 세션이라 이름이 유지되지 않아요.\n그 세션 창에서 바꾸거나, 세션을 닫은 뒤 다시 시도하세요." };
@@ -116,6 +133,9 @@ function register() {
   });
   ipcMain.handle("delete", (e, sid) => {
     const r = bySid(sid);
+    if (r && r.source === "codex") {
+      return { ok: false, message: "Codex 세션은 이 앱에서 삭제를 지원하지 않아요." };
+    }
     const ok = r && store.deleteSession(r.file_path, sid, paths.trashDir(), paths.trashMeta());
     if (ok) INDEX = INDEX.filter((x) => x.session_id !== sid);
     return { ok: !!ok, message: ok ? "" : "삭제 실패 (세션이 실행 중이거나 잠겨 있을 수 있어요)" };
@@ -149,6 +169,7 @@ function register() {
     for (const sid of sids || []) {
       if (running[sid]) { skipped++; continue; }
       const r = bySid(sid);
+      if (r && r.source === "codex") { skipped++; continue; }
       if (r && store.deleteSession(r.file_path, sid, paths.trashDir(), paths.trashMeta())) {
         del.add(sid);
       } else skipped++;
@@ -159,7 +180,7 @@ function register() {
   ipcMain.handle("trash", () => ({ items: store.listTrash(paths.trashMeta()) }));
   ipcMain.handle("open", (e, sid) => {
     const r = bySid(sid);
-    return openInCmd(sid, r && r.cwd);
+    return openInCmd(sid, r && r.cwd, r && r.source);
   });
 }
 

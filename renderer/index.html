@@ -21,7 +21,7 @@ button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opaci
 .itxt{flex:1;min-width:0;cursor:pointer}
 .item .t{font-weight:600}.item .m{color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badge{font-size:11px;padding:1px 6px;border-radius:10px;margin-left:6px}
-.b-clean{background:var(--warn);color:#000}.b-fav{color:var(--warn)}.b-run{background:#2a8f5a;color:#fff}
+.b-clean{background:var(--warn);color:#000}.b-fav{color:var(--warn)}.b-run{background:#2a8f5a;color:#fff}.b-codex{background:#10a37f;color:#fff}
 #meta{color:var(--mut);font-size:12px;margin-bottom:8px}
 #acts,#bodybar{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center}
 #body{flex:1;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px}
@@ -42,6 +42,7 @@ button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opaci
 <body>
 <div id="left">
   <div id="bar">
+    <select id="source"><option value="claude">Claude</option><option value="codex">Codex</option><option value="all">전체</option></select>
     <input id="search" placeholder="검색 (이름·첫 질문)">
     <select id="sort"><option value="recent">최근순</option><option value="name">이름순</option><option value="msg_asc">대화수 적은순</option><option value="msg_desc">대화수 많은순</option></select>
     <select id="project"><option value="">전체 프로젝트</option></select>
@@ -70,24 +71,26 @@ button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opaci
 <script>
 (() => {
 const api=window.api;
-let state={sid:null,fav:false,clean:false,trash:false,showAll:false,msgs:[],selected:new Set(),sessions:[]};
+let state={sid:null,source:"claude",fav:false,clean:false,trash:false,showAll:false,msgs:[],selected:new Set(),sessions:[],curSource:"claude"};
 const $=s=>document.querySelector(s);
 function esc(t){return (t||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
 function fmt(ts){return ts?new Date(ts*1000).toLocaleString("ko"):"";}
 
 async function load(){
   if(state.trash) return loadTrash();
-  const d=await api.list({search:$("#search").value,sort:$("#sort").value,
+  const d=await api.list({source:state.source,search:$("#search").value,sort:$("#sort").value,
     project:$("#project").value,favorites:state.fav,cleanup:state.clean});
   state.sessions=d.sessions;
-  const sel=$("#project");
-  if(sel.options.length<=1)d.projects.forEach(p=>sel.add(new Option(p,p)));
+  const sel=$("#project");const curp=sel.value;
+  sel.innerHTML='<option value="">전체 프로젝트</option>';
+  d.projects.forEach(p=>sel.add(new Option(p,p)));
+  sel.value=curp;
   $("#count").textContent=`총 ${d.total}개`+(d.total>d.shown?` (상위 ${d.shown}개 표시 — 검색으로 좁히세요)`:"");
   $("#list").innerHTML=d.sessions.map(s=>`<div class="item" data-sid="${s.session_id}">
     <input type="checkbox" class="chk" data-sid="${s.session_id}">
     <div class="itxt">
       <div class="t">${s.favorite?'<span class="b-fav">⭐</span>':''}${esc(s.title)||'<span style="color:#666">(이름없음)</span>'}
-        ${s.running?'<span class="badge b-run">●실행중</span>':''}${s.cleanup?'<span class="badge b-clean">정리</span>':''}</div>
+        ${s.source==="codex"?'<span class="badge b-codex">Codex</span>':''}${s.running?'<span class="badge b-run">●실행중</span>':''}${s.cleanup?'<span class="badge b-clean">정리</span>':''}</div>
       <div class="m">${fmt(s.last_activity)} · ${esc(s.project)} · ${s.msg_count}msg · ${esc(s.first_prompt).slice(0,60)}</div>
     </div>
   </div>`).join("")||"<div style='padding:16px;color:#666'>세션 없음</div>";
@@ -132,15 +135,18 @@ async function openSession(sid){
   state.sid=sid;
   const it=(state.sessions||[]).find(s=>s.session_id===sid);
   state.title=it?it.title:"";
+  state.curSource=it?it.source||"claude":"claude";
   document.querySelectorAll(".item").forEach(e=>e.classList.toggle("sel",e.dataset.sid===sid));
   const d=await api.transcript(sid);
   state.msgs=d.messages;
-  $("#title").textContent=sid;
+  $("#title").textContent=(state.curSource==="codex"?"[Codex] ":"")+(it&&it.title?it.title:sid);
+  const codexS=state.curSource==="codex";
   $("#acts").innerHTML=`<button id="aFav">⭐즐겨찾기</button>
-    <button id="aRen">✏️리네임</button>
-    <button id="aOpen">▶️cmd에서 열기</button>
-    <button id="aDel">🗑️삭제</button>`;
-  $("#aFav").onclick=fav;$("#aRen").onclick=rename;$("#aOpen").onclick=openCmd;$("#aDel").onclick=del;
+    ${codexS?"":'<button id="aRen">✏️리네임</button>'}
+    <button id="aOpen">▶️터미널에서 열기</button>
+    ${codexS?"":'<button id="aDel">🗑️삭제</button>'}`;
+  $("#aFav").onclick=fav;$("#aOpen").onclick=openCmd;
+  if(!codexS){$("#aRen").onclick=rename;$("#aDel").onclick=del;}
   renderBodyBar();
   renderBody();
 }
@@ -188,6 +194,7 @@ async function cleanDelete(){
 }
 
 let _t;function debounced(){clearTimeout(_t);_t=setTimeout(load,250);}
+$("#source").onchange=()=>{state.source=$("#source").value;state.selected.clear();load();};
 $("#search").oninput=debounced;$("#sort").onchange=load;$("#project").onchange=load;
 $("#favBtn").onclick=()=>{state.fav=!state.fav;$("#favBtn").style.borderColor=state.fav?"#e0a030":"";load();};
 $("#cleanBtn").onclick=()=>{state.clean=!state.clean;$("#cleanBtn").style.borderColor=state.clean?"#e0a030":"";load();};

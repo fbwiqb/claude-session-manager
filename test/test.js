@@ -155,4 +155,31 @@ test("runningSessions reads lock files", () => {
   assert.equal(indexer.runningSessions(path.join(d, "nope")) && Object.keys(indexer.runningSessions(path.join(d, "nope"))).length, 0);
 });
 
+const codex = require("../lib/codex");
+test("codex buildIndex + transcript", () => {
+  const home = tmp();
+  const sdir = path.join(home, "sessions", "2026", "06");
+  fs.mkdirSync(sdir, { recursive: true });
+  const id = "019eee08-46a0-7c10-b75f-33fed3102801";
+  fs.writeFileSync(path.join(home, "session_index.jsonl"),
+    JSON.stringify({ id, thread_name: "초파리 세션", updated_at: "2026-06-22T06:33:00.000Z" }) + "\n");
+  const roll = path.join(sdir, "rollout-2026-06-22T15-33-00-" + id + ".jsonl");
+  fs.writeFileSync(roll, [
+    JSON.stringify({ type: "session_meta", payload: { id, cwd: "C:\\proj\\codex" } }),
+    JSON.stringify({ type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "안녕 코덱스 질문" }] } }),
+    JSON.stringify({ type: "response_item", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "코덱스 답변" }] } }),
+  ].join("\n"));
+  const rows = codex.buildCodexIndex(home, path.join(home, "cache.json"));
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].source, "codex");
+  assert.equal(rows[0].title, "초파리 세션");
+  assert.equal(rows[0].cwd, "C:\\proj\\codex");
+  assert.equal(rows[0].first_prompt, "안녕 코덱스 질문");
+  assert.equal(rows[0].msg_count, 2);
+  const m = codex.loadCodexTranscript(roll);
+  assert.equal(m.length, 2);
+  assert.equal(m[0].human, true);
+  assert.equal(m[0].text, "안녕 코덱스 질문");
+});
+
 console.log(`\n${pass} passed`);
