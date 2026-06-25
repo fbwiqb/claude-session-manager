@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld("api", {
   list: (o) => ipcRenderer.invoke("list", o),
   transcript: (sid) => ipcRenderer.invoke("transcript", sid),
   favorite: (sid) => ipcRenderer.invoke("favorite", sid),
+  favoriteMove: (sid, dir) => ipcRenderer.invoke("favorite-move", { sid, dir }),
   rename: (sid, title) => ipcRenderer.invoke("rename", { sid, title }),
   remove: (sid) => ipcRenderer.invoke("delete", sid),
   deleteMany: (sids) => ipcRenderer.invoke("delete-many", sids),

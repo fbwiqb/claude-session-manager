@@ -24,9 +24,15 @@ function bySid(sid) {
   return INDEX.find((r) => r.session_id === sid) || CODEX.find((r) => r.session_id === sid);
 }
 
+function fileIncludes(fp, term) {
+  try { return fs.readFileSync(fp, "utf-8").toLowerCase().includes(term); }
+  catch (e) { return false; }
+}
+
 function listSessions(o) {
   o = o || {};
-  const favs = store.loadFavorites(paths.favPath());
+  const favOrder = store.loadFavoriteOrder(paths.favPath());
+  const favs = new Set(favOrder);
   const running = indexer.runningSessions(paths.sessionsDir());
   const now = Date.now() / 1000;
   const src = o.source || "claude";
@@ -43,9 +49,12 @@ function listSessions(o) {
   });
   const search = (o.search || "").toLowerCase();
   if (search) {
-    rows = rows.filter((r) =>
-      (r.title || "").toLowerCase().includes(search) ||
-      (r.first_prompt || "").toLowerCase().includes(search));
+    rows = rows.filter((r) => {
+      if ((r.title || "").toLowerCase().includes(search) ||
+        (r.first_prompt || "").toLowerCase().includes(search)) return true;
+      if (o.deep && r.file_path) return fileIncludes(r.file_path, search);
+      return false;
+    });
   }
   if (o.project) rows = rows.filter((r) => r.project === o.project);
   if (o.favorites) rows = rows.filter((r) => r.favorite);
@@ -53,6 +62,7 @@ function listSessions(o) {
   const sort = o.sort || "recent";
   rows.sort((a, b) => {
     if (!!a.favorite !== !!b.favorite) return a.favorite ? -1 : 1;
+    if (a.favorite && b.favorite) return favOrder.indexOf(a.session_id) - favOrder.indexOf(b.session_id);
     if (sort === "name") return (a.title || "").localeCompare(b.title || "");
     if (sort === "msg_desc") return b.msg_count - a.msg_count;
     if (sort === "msg_asc") return a.msg_count - b.msg_count;
@@ -127,6 +137,8 @@ function register() {
   });
   ipcMain.handle("favorite", (e, sid) =>
     ({ favorite: store.toggleFavorite(paths.favPath(), sid) }));
+  ipcMain.handle("favorite-move", (e, { sid, dir }) =>
+    ({ ok: store.moveFavorite(paths.favPath(), sid, dir) }));
   ipcMain.handle("rename", (e, { sid, title }) => {
     const cur = bySid(sid);
     if (cur && cur.source === "codex") {

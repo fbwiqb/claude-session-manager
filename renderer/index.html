@@ -44,6 +44,7 @@ button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opaci
   <div id="bar">
     <select id="source"><option value="claude">Claude</option><option value="codex">Codex</option><option value="all">전체</option></select>
     <input id="search" placeholder="검색 (이름·첫 질문)">
+    <button id="deepBtn" title="본문 내용까지 검색합니다(느릴 수 있음)">🔎본문</button>
     <select id="sort"><option value="recent">최근순</option><option value="name">이름순</option><option value="msg_asc">대화수 적은순</option><option value="msg_desc">대화수 많은순</option></select>
     <select id="project"><option value="">전체 프로젝트</option></select>
     <button id="favBtn">⭐</button>
@@ -71,15 +72,16 @@ button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opaci
 <script>
 (() => {
 const api=window.api;
-let state={sid:null,source:"claude",fav:false,clean:false,trash:false,showAll:false,msgs:[],selected:new Set(),sessions:[],curSource:"claude"};
+let state={sid:null,source:"claude",fav:false,clean:false,trash:false,deep:false,showAll:false,msgs:[],selected:new Set(),sessions:[],curSource:"claude"};
 const $=s=>document.querySelector(s);
 function esc(t){return (t||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
 function fmt(ts){return ts?new Date(ts*1000).toLocaleString("ko"):"";}
 
 async function load(){
   if(state.trash) return loadTrash();
+  if(state.deep&&$("#search").value)$("#count").textContent="본문 검색 중…";
   const d=await api.list({source:state.source,search:$("#search").value,sort:$("#sort").value,
-    project:$("#project").value,favorites:state.fav,cleanup:state.clean});
+    project:$("#project").value,favorites:state.fav,cleanup:state.clean,deep:state.deep});
   state.sessions=d.sessions;
   const sel=$("#project");const curp=sel.value;
   sel.innerHTML='<option value="">전체 프로젝트</option>';
@@ -141,12 +143,15 @@ async function openSession(sid){
   state.msgs=d.messages;
   $("#title").textContent=(state.curSource==="codex"?"[Codex] ":"")+(it&&it.title?it.title:sid);
   const codexS=state.curSource==="codex";
-  $("#acts").innerHTML=`<button id="aFav">⭐즐겨찾기</button>
+  const isFav=!!(it&&it.favorite);
+  $("#acts").innerHTML=`<button id="aFav">${isFav?"⭐해제":"⭐즐겨찾기"}</button>
+    ${isFav?'<button id="aUp" title="즐겨찾기 순서 위로">⬆️</button><button id="aDn" title="즐겨찾기 순서 아래로">⬇️</button>':''}
     ${codexS?"":'<button id="aRen">✏️리네임</button>'}
     <button id="aOpen">▶️${codexS?"터미널":"cmd"}에서 열기</button>
     ${codexS?"":'<button id="aApp" title="데스크톱앱에 새 세션으로 복사 import됩니다(이름 미유지). 이어서 작업하려면 cmd에서 열기 권장">🖥️앱으로 가져오기(복사)</button>'}
     ${codexS?"":'<button id="aDel">🗑️삭제</button>'}`;
   $("#aFav").onclick=fav;$("#aOpen").onclick=openCmd;
+  if(isFav){$("#aUp").onclick=()=>favMove(-1);$("#aDn").onclick=()=>favMove(1);}
   if(!codexS){$("#aRen").onclick=rename;$("#aApp").onclick=openApp;$("#aDel").onclick=del;}
   renderBodyBar();
   renderBody();
@@ -181,6 +186,7 @@ function askText(msg,def){
 }
 
 async function fav(){await api.favorite(state.sid);load();}
+async function favMove(dir){await api.favoriteMove(state.sid,dir);await load();}
 async function rename(){const t=await askText("새 이름:",state.title||"");if(t!=null&&t.trim()){const res=await api.rename(state.sid,t.trim());if(res&&res.ok===false&&res.message)alert(res.message);load();}}
 async function del(){if(confirm("휴지통으로 이동할까요?")){const r=await api.remove(state.sid);if(r.ok){load();$("#body").innerHTML="";$("#bodybar").innerHTML="";$("#title").textContent="세션을 선택하세요";}else alert(r.message||"삭제 실패");}}
 async function restore(sid){await api.restore(sid);loadTrash();}
@@ -197,6 +203,7 @@ async function cleanDelete(){
 
 let _t;function debounced(){clearTimeout(_t);_t=setTimeout(load,250);}
 $("#source").onchange=()=>{state.source=$("#source").value;state.selected.clear();load();};
+$("#deepBtn").onclick=()=>{state.deep=!state.deep;$("#deepBtn").style.borderColor=state.deep?"#7c5cff":"";load();};
 $("#search").oninput=debounced;$("#sort").onchange=load;$("#project").onchange=load;
 $("#favBtn").onclick=()=>{state.fav=!state.fav;$("#favBtn").style.borderColor=state.fav?"#e0a030":"";load();};
 $("#cleanBtn").onclick=()=>{state.clean=!state.clean;$("#cleanBtn").style.borderColor=state.clean?"#e0a030":"";load();};

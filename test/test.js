@@ -88,6 +88,20 @@ test("favorites toggle", () => {
   assert.ok(!store.loadFavorites(fp).has("s1"));
 });
 
+test("favorite order + move", () => {
+  const d = tmp();
+  const fp = path.join(d, "fav.json");
+  store.toggleFavorite(fp, "a");
+  store.toggleFavorite(fp, "b");
+  store.toggleFavorite(fp, "c");
+  assert.deepEqual(store.loadFavoriteOrder(fp), ["a", "b", "c"]);
+  store.moveFavorite(fp, "c", -1);
+  assert.deepEqual(store.loadFavoriteOrder(fp), ["a", "c", "b"]);
+  store.moveFavorite(fp, "a", 1);
+  assert.deepEqual(store.loadFavoriteOrder(fp), ["c", "a", "b"]);
+  assert.equal(store.moveFavorite(fp, "c", -1), false);
+});
+
 test("trash delete/restore roundtrip", () => {
   const root = tmp();
   const proj = path.join(root, "projects", "projA");
