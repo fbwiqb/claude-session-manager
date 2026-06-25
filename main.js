@@ -52,6 +52,7 @@ function listSessions(o) {
   if (o.cleanup) rows = rows.filter((r) => r.cleanup);
   const sort = o.sort || "recent";
   rows.sort((a, b) => {
+    if (!!a.favorite !== !!b.favorite) return a.favorite ? -1 : 1;
     if (sort === "name") return (a.title || "").localeCompare(b.title || "");
     if (sort === "msg_desc") return b.msg_count - a.msg_count;
     if (sort === "msg_asc") return a.msg_count - b.msg_count;
