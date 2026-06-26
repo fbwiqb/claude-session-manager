@@ -14,4 +14,5 @@ contextBridge.exposeInMainWorld("api", {
   openApp: (sid) => ipcRenderer.invoke("open-app", sid),
   trash: () => ipcRenderer.invoke("trash"),
   refresh: () => ipcRenderer.invoke("refresh"),
+  onSearchProgress: (cb) => ipcRenderer.on("search-progress", (e, d) => cb(d)),
 });

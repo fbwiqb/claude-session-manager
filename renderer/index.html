@@ -33,6 +33,9 @@ button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opaci
 .tool{color:var(--mut);font-size:12px;font-style:italic}
 .title{font-size:16px;font-weight:700;margin-bottom:4px}
 .hint{color:var(--mut);font-size:12px}
+mark{background:var(--warn);color:#000;border-radius:2px;padding:0 1px}
+.spin{display:inline-block;width:12px;height:12px;vertical-align:-2px;border:2px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:100}
 .mbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;width:380px;max-width:90%}
 #mmsg{margin-bottom:8px}
@@ -207,14 +210,23 @@ function renderBodyBar(){
   $("#tg").onclick=()=>{state.showAll=!state.showAll;renderBodyBar();renderBody();};
 }
 
+function hl(text,term){
+  const e=esc(text);
+  if(!term) return e;
+  try{const re=new RegExp(esc(term).replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"gi");return e.replace(re,m=>`<mark>${m}</mark>`);}
+  catch(x){return e;}
+}
 function renderBody(){
-  let list=state.showAll?state.msgs:state.msgs.filter(m=>m.human);
+  const term=$("#search").value.trim();
+  let list=(state.showAll||term)?state.msgs:state.msgs.filter(m=>m.human);
   list=list.filter(m=>(m.text||"").trim());
   $("#body").innerHTML=list.map(m=>`<div class="msg ${m.role}">
     <div class="r">${m.role==="user"?"나":"AI"}</div>
-    <div class="x">${esc(m.text)}</div></div>`).join("")
+    <div class="x">${hl(m.text,term)}</div></div>`).join("")
     ||"<div class='hint'>표시할 메시지가 없어요.</div>";
-  $("#body").scrollTop=$("#body").scrollHeight;
+  const mk=$("#body").querySelector("mark");
+  if(mk)mk.scrollIntoView({block:"center"});
+  else $("#body").scrollTop=$("#body").scrollHeight;
 }
 
 function askText(msg,def){
@@ -253,6 +265,7 @@ $("#cleanBtn").onclick=()=>{state.clean=!state.clean;$("#cleanBtn").style.border
 $("#cleanDelBtn").onclick=cleanDelete;
 $("#trashBtn").onclick=()=>{state.trash=!state.trash;$("#trashBtn").style.borderColor=state.trash?"#e0a030":"";load();};
 $("#refreshBtn").onclick=async()=>{await api.refresh();load();};
+api.onSearchProgress(d=>{if(d&&d.total)$("#count").innerHTML='<span class="spin"></span> 본문 검색 '+Math.round(d.done/d.total*100)+'%';});
 $("#helpBtn").onclick=()=>{$("#help").style.display="flex";};
 $("#helpClose").onclick=()=>{$("#help").style.display="none";};
 $("#help").onclick=e=>{if(e.target.id==="help")$("#help").style.display="none";};

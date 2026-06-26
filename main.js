@@ -29,15 +29,14 @@ function fileIncludes(fp, term) {
   catch (e) { return false; }
 }
 
-function listSessions(o) {
-  o = o || {};
+function flagRows(o) {
   const favOrder = store.loadFavoriteOrder(paths.favPath());
   const favs = new Set(favOrder);
   const running = indexer.runningSessions(paths.sessionsDir());
   const now = Date.now() / 1000;
   const src = o.source || "claude";
   const baseRows = src === "codex" ? CODEX : src === "all" ? INDEX.concat(CODEX) : INDEX;
-  let rows = baseRows.map((r) => {
+  const rows = baseRows.map((r) => {
     const rn = running[r.session_id];
     return {
       ...r,
@@ -47,15 +46,15 @@ function listSessions(o) {
       title: rn && rn.name ? rn.name : r.title,
     };
   });
-  const search = (o.search || "").toLowerCase();
-  if (search) {
-    rows = rows.filter((r) => {
-      if ((r.title || "").toLowerCase().includes(search) ||
-        (r.first_prompt || "").toLowerCase().includes(search)) return true;
-      if (o.deep && r.file_path) return fileIncludes(r.file_path, search);
-      return false;
-    });
-  }
+  return { rows, favOrder, baseRows };
+}
+
+function quickMatch(r, search) {
+  return (r.title || "").toLowerCase().includes(search) ||
+    (r.first_prompt || "").toLowerCase().includes(search);
+}
+
+function finishRows(rows, o, favOrder, baseRows) {
   if (o.project) rows = rows.filter((r) => r.project === o.project);
   if (o.favorites) rows = rows.filter((r) => r.favorite);
   if (o.cleanup) rows = rows.filter((r) => r.cleanup);
@@ -72,6 +71,37 @@ function listSessions(o) {
   rows = rows.slice(0, 200);
   const projects = [...new Set(baseRows.map((r) => r.project))].sort();
   return { sessions: rows, total, shown: rows.length, projects };
+}
+
+function listSessions(o) {
+  o = o || {};
+  const { rows, favOrder, baseRows } = flagRows(o);
+  const search = (o.search || "").toLowerCase();
+  const filtered = search
+    ? rows.filter((r) => quickMatch(r, search) || (o.deep && r.file_path && fileIncludes(r.file_path, search)))
+    : rows;
+  return finishRows(filtered, o, favOrder, baseRows);
+}
+
+async function deepListSessions(o, onProgress) {
+  const { rows, favOrder, baseRows } = flagRows(o);
+  const search = (o.search || "").toLowerCase();
+  const matched = [];
+  const rest = [];
+  for (const r of rows) {
+    if (quickMatch(r, search)) matched.push(r);
+    else if (r.file_path) rest.push(r);
+  }
+  const total = rest.length;
+  for (let i = 0; i < total; i++) {
+    const r = rest[i];
+    let txt = "";
+    try { txt = (await fs.promises.readFile(r.file_path, "utf-8")).toLowerCase(); } catch (e) {}
+    if (txt.includes(search)) matched.push(r);
+    if (onProgress && (i % 2 === 0 || i === total - 1)) onProgress(i + 1, total);
+  }
+  if (onProgress) onProgress(total, total);
+  return finishRows(matched, o, favOrder, baseRows);
 }
 
 function resumeArgs(sid, source) {
@@ -125,7 +155,13 @@ function openInApp(sid, source) {
 }
 
 function register() {
-  ipcMain.handle("list", (e, o) => listSessions(o));
+  ipcMain.handle("list", async (e, o) => {
+    if (o && o.deep && o.search) {
+      return await deepListSessions(o, (done, total) =>
+        e.sender.send("search-progress", { done, total }));
+    }
+    return listSessions(o);
+  });
   ipcMain.handle("refresh", () => { reindex(); return listSessions({}); });
   ipcMain.handle("transcript", (e, sid) => {
     const r = bySid(sid);
