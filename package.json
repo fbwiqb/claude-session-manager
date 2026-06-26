@@ -1,6 +1,6 @@
 {
   "name": "session-manager",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "클로드 세션 매니저 (Electron)",
   "main": "main.js",
   "scripts": {
