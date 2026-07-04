@@ -198,6 +198,10 @@ function register() {
     if (r && r.source === "codex") {
       return { ok: false, message: "Codex 세션은 이 앱에서 삭제를 지원하지 않아요." };
     }
+    const running = indexer.runningSessions(paths.sessionsDir());
+    if (running[sid]) {
+      return { ok: false, message: "지금 실행 중인 세션은 삭제할 수 없어요.\n세션을 닫은 뒤 다시 시도하세요." };
+    }
     const ok = r && store.deleteSession(r.file_path, sid, paths.trashDir(), paths.trashMeta());
     if (ok) INDEX = INDEX.filter((x) => x.session_id !== sid);
     return { ok: !!ok, message: ok ? "" : "삭제 실패 (세션이 실행 중이거나 잠겨 있을 수 있어요)" };
