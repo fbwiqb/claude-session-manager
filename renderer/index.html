@@ -2,7 +2,8 @@
 <html lang="ko"><head><meta charset="utf-8">
 <title>클로드 세션 매니저</title>
 <style>
-:root{--bg:#0f1115;--panel:#1a1d24;--line:#2a2e38;--fg:#e6e8ee;--mut:#8b91a0;--acc:#7c5cff;--warn:#e0a030}
+:root{--bg:#0f1115;--panel:#1a1d24;--line:#2a2e38;--fg:#e6e8ee;--mut:#8b91a0;--acc:#7c5cff;--warn:#e0a030;--hov:#161922;--sel:#202430}
+body.light{--bg:#f5f6f8;--panel:#ffffff;--line:#d9dce3;--fg:#1c1f26;--mut:#6b7280;--acc:#6c4de0;--warn:#e8a83c;--hov:#eceef2;--sel:#e2e6f0}
 *{box-sizing:border-box}body{margin:0;font:14px/1.5 "Malgun Gothic",sans-serif;background:var(--bg);color:var(--fg);display:flex;height:100vh}
 #left{width:42%;border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
 #right{flex:1;display:flex;flex-direction:column;padding:16px;overflow:hidden}
@@ -18,7 +19,7 @@ button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opaci
 #selbar button{padding:4px 10px;font-size:12px}
 #list{overflow:auto;flex:1}
 .item{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:flex-start}
-.item:hover{background:#161922}.item.sel{background:#202430}
+.item:hover{background:var(--hov)}.item.sel{background:var(--sel)}
 .chk{margin-top:3px;flex:none;cursor:pointer}
 .itxt{flex:1;min-width:0;cursor:pointer}
 .item .t{font-weight:600}.item .m{color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -64,6 +65,7 @@ mark{background:var(--warn);color:#000;border-radius:2px;padding:0 1px}
     <button id="cleanDelBtn" title="30일 이상 + 이름없는 세션을 전부 휴지통으로">🧹일괄삭제</button>
     <button id="trashBtn">🗑️휴지통</button>
     <button id="refreshBtn">🔄</button>
+    <button id="themeBtn" title="라이트/다크 전환">☀️</button>
     <button id="helpBtn" title="사용법">❓사용법</button>
   </div>
   <div id="count"></div>
@@ -118,8 +120,11 @@ mark{background:var(--warn);color:#000;border-radius:2px;padding:0 1px}
 <script>
 (() => {
 const api=window.api;
-let state={sid:null,source:"claude",fav:false,clean:false,trash:false,deep:false,showAll:false,msgs:[],selected:new Set(),sessions:[],curSource:"claude"};
+function applyTheme(t){document.body.classList.toggle("light",t==="light");$("#themeBtn").textContent=t==="light"?"🌙":"☀️";}
 const $=s=>document.querySelector(s);
+let theme=localStorage.getItem("csm-theme")||"dark";
+applyTheme(theme);
+let state={sid:null,source:"claude",fav:false,clean:false,trash:false,deep:false,showAll:false,msgs:[],selected:new Set(),sessions:[],curSource:"claude"};
 function esc(t){return (t||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
 function fmt(ts){return ts?new Date(ts*1000).toLocaleString("ko"):"";}
 
@@ -137,11 +142,11 @@ async function load(){
   $("#list").innerHTML=d.sessions.map(s=>`<div class="item" data-sid="${s.session_id}">
     <input type="checkbox" class="chk" data-sid="${s.session_id}">
     <div class="itxt">
-      <div class="t">${s.favorite?'<span class="b-fav">⭐</span>':''}${esc(s.title)||'<span style="color:#666">(이름없음)</span>'}
+      <div class="t">${s.favorite?'<span class="b-fav">⭐</span>':''}${esc(s.title)||'<span style="color:var(--mut)">(이름없음)</span>'}
         ${s.source==="codex"?'<span class="badge b-codex">Codex</span>':''}${s.running?'<span class="badge b-run">●실행중</span>':''}${s.cleanup?'<span class="badge b-clean">정리</span>':''}</div>
       <div class="m">${fmt(s.last_activity)} · ${esc(s.project)} · ${s.msg_count}msg · ${esc(s.first_prompt).slice(0,60)}</div>
     </div>
-  </div>`).join("")||"<div style='padding:16px;color:#666'>세션 없음</div>";
+  </div>`).join("")||"<div style='padding:16px;color:var(--mut)'>세션 없음</div>";
   document.querySelectorAll(".itxt").forEach(e=>e.onclick=()=>openSession(e.parentElement.dataset.sid));
   document.querySelectorAll(".chk").forEach(c=>{
     c.checked=state.selected.has(c.dataset.sid);
@@ -175,7 +180,7 @@ async function loadTrash(){
   $("#count").textContent=`휴지통 ${d.items.length}개`;
   $("#list").innerHTML=d.items.map(i=>`<div class="item">
     <div class="t">${esc(i.session_id)}</div><div class="m">삭제: ${fmt(i.deleted_at)}</div>
-    <button data-r="${i.session_id}">복원</button></div>`).join("")||"<div style='padding:16px;color:#666'>휴지통 비어있음</div>";
+    <button data-r="${i.session_id}">복원</button></div>`).join("")||"<div style='padding:16px;color:var(--mut)'>휴지통 비어있음</div>";
   document.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>restore(b.dataset.r));
 }
 
@@ -265,6 +270,7 @@ $("#cleanBtn").onclick=()=>{state.clean=!state.clean;$("#cleanBtn").style.border
 $("#cleanDelBtn").onclick=cleanDelete;
 $("#trashBtn").onclick=()=>{state.trash=!state.trash;$("#trashBtn").style.borderColor=state.trash?"#e0a030":"";load();};
 $("#refreshBtn").onclick=async()=>{await api.refresh();load();};
+$("#themeBtn").onclick=()=>{theme=theme==="light"?"dark":"light";localStorage.setItem("csm-theme",theme);applyTheme(theme);};
 api.onSearchProgress(d=>{if(d&&d.total)$("#count").innerHTML='<span class="spin"></span> 본문 검색 '+Math.round(d.done/d.total*100)+'%';});
 $("#helpBtn").onclick=()=>{$("#help").style.display="flex";};
 $("#helpClose").onclick=()=>{$("#help").style.display="none";};
