@@ -2,8 +2,7 @@
 <html lang="ko"><head><meta charset="utf-8">
 <title>클로드 세션 매니저</title>
 <style>
-:root{--bg:#0f1115;--panel:#1a1d24;--line:#2a2e38;--fg:#e6e8ee;--mut:#8b91a0;--acc:#7c5cff;--warn:#e0a030;--hov:#161922;--sel:#202430}
-body.light{--bg:#f5f6f8;--panel:#ffffff;--line:#d9dce3;--fg:#1c1f26;--mut:#6b7280;--acc:#6c4de0;--warn:#e8a83c;--hov:#eceef2;--sel:#e2e6f0}
+:root{--bg:#f5f6f8;--panel:#ffffff;--line:#d9dce3;--fg:#1c1f26;--mut:#6b7280;--acc:#6c4de0;--warn:#e8a83c;--hov:#eceef2;--sel:#e2e6f0}
 *{box-sizing:border-box}body{margin:0;font:14px/1.5 "Malgun Gothic",sans-serif;background:var(--bg);color:var(--fg);display:flex;height:100vh}
 #left{width:42%;border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
 #right{flex:1;display:flex;flex-direction:column;padding:16px;overflow:hidden}
@@ -65,7 +64,6 @@ mark{background:var(--warn);color:#000;border-radius:2px;padding:0 1px}
     <button id="cleanDelBtn" title="30일 이상 + 이름없는 세션을 전부 휴지통으로">🧹일괄삭제</button>
     <button id="trashBtn">🗑️휴지통</button>
     <button id="refreshBtn">🔄</button>
-    <button id="themeBtn" title="라이트/다크 전환">☀️</button>
     <button id="helpBtn" title="사용법">❓사용법</button>
   </div>
   <div id="count"></div>
@@ -120,10 +118,7 @@ mark{background:var(--warn);color:#000;border-radius:2px;padding:0 1px}
 <script>
 (() => {
 const api=window.api;
-function applyTheme(t){document.body.classList.toggle("light",t==="light");$("#themeBtn").textContent=t==="light"?"🌙":"☀️";}
 const $=s=>document.querySelector(s);
-let theme=localStorage.getItem("csm-theme")||"dark";
-applyTheme(theme);
 let state={sid:null,source:"claude",fav:false,clean:false,trash:false,deep:false,showAll:false,msgs:[],selected:new Set(),sessions:[],curSource:"claude"};
 function esc(t){return (t||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
 function fmt(ts){return ts?new Date(ts*1000).toLocaleString("ko"):"";}
@@ -270,7 +265,6 @@ $("#cleanBtn").onclick=()=>{state.clean=!state.clean;$("#cleanBtn").style.border
 $("#cleanDelBtn").onclick=cleanDelete;
 $("#trashBtn").onclick=()=>{state.trash=!state.trash;$("#trashBtn").style.borderColor=state.trash?"#e0a030":"";load();};
 $("#refreshBtn").onclick=async()=>{await api.refresh();load();};
-$("#themeBtn").onclick=()=>{theme=theme==="light"?"dark":"light";localStorage.setItem("csm-theme",theme);applyTheme(theme);};
 api.onSearchProgress(d=>{if(d&&d.total)$("#count").innerHTML='<span class="spin"></span> 본문 검색 '+Math.round(d.done/d.total*100)+'%';});
 $("#helpBtn").onclick=()=>{$("#help").style.display="flex";};
 $("#helpClose").onclick=()=>{$("#help").style.display="none";};
