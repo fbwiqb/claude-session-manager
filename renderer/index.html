@@ -6,9 +6,12 @@
 *{box-sizing:border-box}body{margin:0;font:14px/1.5 "Malgun Gothic",sans-serif;background:var(--bg);color:var(--fg);display:flex;height:100vh}
 #left{width:42%;border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
 #right{flex:1;display:flex;flex-direction:column;padding:16px;overflow:hidden}
-#bar{padding:10px;border-bottom:1px solid var(--line);display:flex;gap:6px;flex-wrap:wrap}
+#bar{padding:10px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.brow{display:flex;gap:6px;flex-wrap:wrap}
 input,select,button{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:13px}
 #bar select{min-width:0;max-width:100%}
+#bar button svg{display:block}
+#favBtn,#refreshBtn{display:flex;align-items:center}
 #project{max-width:150px}
 button{cursor:pointer}button:hover{border-color:var(--acc)}button:disabled{opacity:.5;cursor:default}
 #search{flex:1;min-width:120px}
@@ -54,17 +57,21 @@ mark{background:var(--warn);color:#000;border-radius:2px;padding:0 1px}
 <body>
 <div id="left">
   <div id="bar">
-    <select id="source"><option value="claude">Claude</option><option value="codex">Codex</option><option value="all">전체</option></select>
-    <input id="search" placeholder="검색 (이름·첫 질문)">
-    <button id="deepBtn" title="본문 내용까지 검색합니다(느릴 수 있음)">🔎본문</button>
-    <select id="sort"><option value="recent">최근순</option><option value="name">이름순</option><option value="msg_asc">대화수 적은순</option><option value="msg_desc">대화수 많은순</option></select>
-    <select id="project"><option value="">전체 프로젝트</option></select>
-    <button id="favBtn">⭐</button>
-    <button id="cleanBtn">🧹정리추천</button>
-    <button id="cleanDelBtn" title="30일 이상 + 이름없는 세션을 전부 휴지통으로">🧹일괄삭제</button>
-    <button id="trashBtn">🗑️휴지통</button>
-    <button id="refreshBtn">🔄</button>
-    <button id="helpBtn" title="사용법">❓사용법</button>
+    <div class="brow">
+      <select id="source"><option value="claude">Claude</option><option value="codex">Codex</option><option value="all">전체</option></select>
+      <input id="search" placeholder="검색 (이름·첫 질문)">
+      <button id="deepBtn" title="본문 내용까지 검색합니다(느릴 수 있음)">본문</button>
+      <select id="sort"><option value="recent">최근순</option><option value="name">이름순</option><option value="msg_asc">대화수 적은순</option><option value="msg_desc">대화수 많은순</option></select>
+    </div>
+    <div class="brow">
+      <select id="project"><option value="">전체 프로젝트</option></select>
+      <button id="favBtn" title="즐겨찾기만 보기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button>
+      <button id="cleanBtn">정리추천</button>
+      <button id="cleanDelBtn" title="30일 이상 + 이름없는 세션을 전부 휴지통으로">일괄삭제</button>
+      <button id="trashBtn">휴지통</button>
+      <button id="refreshBtn" title="새로고침"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg></button>
+      <button id="helpBtn" title="사용법">사용법</button>
+    </div>
   </div>
   <div id="count"></div>
   <div id="selbar"></div>
@@ -84,33 +91,33 @@ mark{background:var(--warn);color:#000;border-radius:2px;padding:0 1px}
   <div class="mbtns"><button id="mcancel">취소</button><button id="mok">확인</button></div>
 </div></div>
 <div id="help"><div class="helpbox">
-  <h2>📋 세션매니저 사용법</h2>
+  <h2>세션매니저 사용법</h2>
   <p style="color:var(--mut);font-size:13px">클로드/코덱스 세션을 한곳에서 찾고, 열고, 관리합니다.</p>
-  <h3>🔍 찾기</h3>
+  <h3>찾기</h3>
   <ul>
     <li><span class="k">검색창</span>: 이름·첫 질문으로 빠른 검색</li>
-    <li><span class="k">🔎본문</span>: 켜면 대화 <b>내용까지</b> 검색(느릴 수 있음)</li>
+    <li><span class="k">본문</span>: 켜면 대화 <b>내용까지</b> 검색(느릴 수 있음)</li>
     <li><span class="k">소스 토글</span>: Claude / Codex / 전체 전환</li>
     <li><span class="k">정렬</span>: 최근순·이름순·대화수(적은/많은)순</li>
   </ul>
-  <h3>📂 열기</h3>
+  <h3>열기</h3>
   <ul>
-    <li><span class="k">▶️ cmd에서 열기</span>: 원본 세션을 그대로 이어서 (claude -r). 이름·폴더 유지 — <b>권장</b></li>
-    <li><span class="k">🖥️ 앱으로 가져오기(복사)</span>: 데스크톱앱에 새 사본으로 import(이름 미유지)</li>
-    <li>세션은 <b>원래 작업 폴더</b>에서 열립니다. Windows Terminal이 있으면 새 탭으로.</li>
+    <li><span class="k">터미널에서 열기</span>: 원본 세션을 그대로 이어서 (claude -r). 이름·폴더 유지 — <b>권장</b></li>
+    <li><span class="k">앱으로 가져오기(복사)</span>: 데스크톱앱에 새 사본으로 import(이름 미유지)</li>
+    <li>세션은 <b>원래 작업 폴더</b>에서 열립니다.</li>
   </ul>
-  <h3>⭐ 관리</h3>
+  <h3>관리</h3>
   <ul>
-    <li><span class="k">⭐즐겨찾기</span>: 항상 상단 고정. ⬆️⬇️로 순서 조정</li>
-    <li><span class="k">✏️리네임</span>: 이름 변경(claude 피커와 동기화). 실행 중 세션은 불가</li>
+    <li><span class="k">즐겨찾기</span>: 항상 상단 고정. 위/아래 버튼으로 순서 조정</li>
+    <li><span class="k">리네임</span>: 이름 변경(claude 피커와 동기화). 실행 중 세션은 불가</li>
     <li><span class="k">체크박스 + 선택삭제</span>: 여러 개 골라 휴지통으로</li>
-    <li><span class="k">🧹일괄삭제</span>: 30일 이상 + 이름없는 세션 일괄 정리</li>
-    <li><span class="k">🗑️휴지통</span>: 삭제는 휴지통 이동(복원 가능)</li>
+    <li><span class="k">일괄삭제</span>: 30일 이상 + 이름없는 세션 일괄 정리</li>
+    <li><span class="k">휴지통</span>: 삭제는 휴지통 이동(복원 가능)</li>
     <li><span class="b-run" style="padding:1px 5px;border-radius:8px">●실행중</span> 표시 = 지금 켜져있는 세션(보호됨)</li>
   </ul>
-  <h3>🔄 기타</h3>
+  <h3>기타</h3>
   <ul>
-    <li><span class="k">🔄</span> 새로고침 / 새 버전은 시작 시 자동 알림(업데이트)</li>
+    <li>새로고침 / 새 버전은 시작 시 자동 알림(업데이트)</li>
     <li>창을 닫으면 종료됩니다.</li>
   </ul>
   <div class="mbtns" style="margin-top:14px"><button id="helpClose">닫기</button></div>
@@ -265,10 +272,10 @@ $("#cleanBtn").onclick=()=>{state.clean=!state.clean;$("#cleanBtn").style.border
 $("#cleanDelBtn").onclick=cleanDelete;
 $("#trashBtn").onclick=()=>{state.trash=!state.trash;$("#trashBtn").style.borderColor=state.trash?"#e0a030":"";load();};
 $("#refreshBtn").onclick=async()=>{await api.refresh();load();};
-api.onSearchProgress(d=>{if(d&&d.total)$("#count").innerHTML='<span class="spin"></span> 본문 검색 '+Math.round(d.done/d.total*100)+'%';});
 $("#helpBtn").onclick=()=>{$("#help").style.display="flex";};
 $("#helpClose").onclick=()=>{$("#help").style.display="none";};
 $("#help").onclick=e=>{if(e.target.id==="help")$("#help").style.display="none";};
+api.onSearchProgress(d=>{if(d&&d.total)$("#count").innerHTML='<span class="spin"></span> 본문 검색 '+Math.round(d.done/d.total*100)+'%';});
 load();
 })();
 </script></body></html>
