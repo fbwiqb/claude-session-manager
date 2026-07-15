@@ -196,4 +196,50 @@ test("codex buildIndex + transcript", () => {
   assert.equal(m[0].text, "안녕 코덱스 질문");
 });
 
+test("codex delete/restore + index exclusion", () => {
+  const home = tmp();
+  process.env.CODEX_HOME = home;
+  const sdir = path.join(home, "sessions");
+  fs.mkdirSync(sdir, { recursive: true });
+  const A = "019eee08-46a0-7c10-b75f-33fed3102801";
+  const B = "019eee08-46a0-7c10-b75f-33fed3102802";
+  const idx = path.join(home, "session_index.jsonl");
+  fs.writeFileSync(idx, [
+    JSON.stringify({ id: A, thread_name: "가계부", updated_at: "2026-06-22T06:33:00.000Z" }),
+    JSON.stringify({ id: B, thread_name: "덧그리다", updated_at: "2026-06-22T07:00:00.000Z" }),
+  ].join("\n"));
+  const rollA = path.join(sdir, "rollout-2026-06-22T15-33-00-" + A + ".jsonl");
+  const rollB = path.join(sdir, "rollout-2026-06-22T16-00-00-" + B + ".jsonl");
+  fs.writeFileSync(rollA, JSON.stringify({ type: "session_meta", payload: { id: A, cwd: "C:\\a" } }) + "\n");
+  fs.writeFileSync(rollB, JSON.stringify({ type: "session_meta", payload: { id: B, cwd: "C:\\b" } }) + "\n");
+  const cache = path.join(home, "cache.json");
+  const trashDir = path.join(home, "_codextrash");
+  const meta = path.join(home, "trash.json");
+
+  let rows = codex.buildCodexIndex(home, cache);
+  assert.equal(rows.length, 2);
+  const rowA = rows.find((r) => r.session_id === A);
+
+  assert.equal(codex.deleteCodexSession(rowA, trashDir, meta), true);
+  assert.ok(!fs.existsSync(rollA));
+  assert.ok(fs.existsSync(path.join(trashDir, path.basename(rollA))));
+  assert.ok(codex.deletedCodexIds(meta).has(A));
+
+  rows = codex.buildCodexIndex(home, cache, codex.deletedCodexIds(meta));
+  assert.deepEqual(rows.map((r) => r.session_id), [B]);
+
+  assert.equal(codex.restoreCodexSession(A, trashDir, meta), true);
+  assert.ok(fs.existsSync(rollA));
+  assert.ok(!codex.deletedCodexIds(meta).has(A));
+  rows = codex.buildCodexIndex(home, cache, codex.deletedCodexIds(meta));
+  assert.equal(rows.length, 2);
+
+  // 휴지통 파일이 없으면 복원은 조용히 성공하지 말고 실패해야 함(유령 방지)
+  codex.deleteCodexSession(rows.find((r) => r.session_id === B), trashDir, meta);
+  fs.unlinkSync(path.join(trashDir, path.basename(rollB)));
+  assert.equal(codex.restoreCodexSession(B, trashDir, meta), false);
+  assert.ok(codex.deletedCodexIds(meta).has(B));
+  delete process.env.CODEX_HOME;
+});
+
 console.log(`\n${pass} passed`);

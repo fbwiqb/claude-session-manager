@@ -16,7 +16,7 @@ let CODEX = [];
 
 function reindex() {
   INDEX = indexer.buildIndex(paths.projectsDir(), paths.indexCache());
-  try { CODEX = codex.buildCodexIndex(codex.codexHome(), paths.codexIndexCache()); } catch (e) { CODEX = []; }
+  try { CODEX = codex.buildCodexIndex(codex.codexHome(), paths.codexIndexCache(), codex.deletedCodexIds(paths.trashMeta())); } catch (e) { CODEX = []; }
   return INDEX;
 }
 
@@ -41,7 +41,7 @@ function flagRows(o) {
     return {
       ...r,
       favorite: favs.has(r.session_id),
-      cleanup: cleanup.isCleanupCandidate(r, favs, now),
+      cleanup: r.source === "codex" ? false : cleanup.isCleanupCandidate(r, favs, now),
       running: !!rn,
       title: rn && rn.name ? rn.name : r.title,
     };
@@ -196,7 +196,9 @@ function register() {
   ipcMain.handle("delete", (e, sid) => {
     const r = bySid(sid);
     if (r && r.source === "codex") {
-      return { ok: false, message: "Codex 세션은 이 앱에서 삭제를 지원하지 않아요." };
+      const cok = codex.deleteCodexSession(r, paths.codexTrashDir(), paths.trashMeta());
+      if (cok) CODEX = CODEX.filter((x) => x.session_id !== sid);
+      return { ok: cok, message: cok ? "" : "삭제 실패" };
     }
     const running = indexer.runningSessions(paths.sessionsDir());
     if (running[sid]) {
@@ -207,6 +209,13 @@ function register() {
     return { ok: !!ok, message: ok ? "" : "삭제 실패 (세션이 실행 중이거나 잠겨 있을 수 있어요)" };
   });
   ipcMain.handle("restore", (e, sid) => {
+    if (codex.deletedCodexIds(paths.trashMeta()).has(sid)) {
+      const cok = codex.restoreCodexSession(sid, paths.codexTrashDir(), paths.trashMeta());
+      if (cok) {
+        try { CODEX = codex.buildCodexIndex(codex.codexHome(), paths.codexIndexCache(), codex.deletedCodexIds(paths.trashMeta())); } catch (e2) {}
+      }
+      return { ok: cok };
+    }
     const dest = store.restoreSession(sid, paths.trashDir(), paths.trashMeta());
     if (dest) {
       const u = indexer.parseSession(dest);
@@ -235,12 +244,17 @@ function register() {
     for (const sid of sids || []) {
       if (running[sid]) { skipped++; continue; }
       const r = bySid(sid);
-      if (r && r.source === "codex") { skipped++; continue; }
+      if (r && r.source === "codex") {
+        if (codex.deleteCodexSession(r, paths.codexTrashDir(), paths.trashMeta())) del.add(sid);
+        else skipped++;
+        continue;
+      }
       if (r && store.deleteSession(r.file_path, sid, paths.trashDir(), paths.trashMeta())) {
         del.add(sid);
       } else skipped++;
     }
     INDEX = INDEX.filter((r) => !del.has(r.session_id));
+    CODEX = CODEX.filter((r) => !del.has(r.session_id));
     return { deleted: del.size, skipped };
   });
   ipcMain.handle("trash", () => ({ items: store.listTrash(paths.trashMeta()) }));

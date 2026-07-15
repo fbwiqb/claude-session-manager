@@ -202,10 +202,11 @@ async function openSession(sid){
     ${codexS?"":'<button id="aRen">✏️리네임</button>'}
     <button id="aOpen">▶️${codexS?"터미널":"cmd"}에서 열기</button>
     ${codexS?"":'<button id="aApp" title="데스크톱앱에 새 세션으로 복사 import됩니다(이름 미유지). 이어서 작업하려면 cmd에서 열기 권장">🖥️앱으로 가져오기(복사)</button>'}
-    ${codexS?"":'<button id="aDel">🗑️삭제</button>'}`;
+    <button id="aDel">🗑️삭제</button>`;
   $("#aFav").onclick=fav;$("#aOpen").onclick=openCmd;
   if(isFav){$("#aUp").onclick=()=>favMove(-1);$("#aDn").onclick=()=>favMove(1);}
-  if(!codexS){$("#aRen").onclick=rename;$("#aApp").onclick=openApp;$("#aDel").onclick=del;}
+  $("#aDel").onclick=del;
+  if(!codexS){$("#aRen").onclick=rename;$("#aApp").onclick=openApp;}
   renderBodyBar();
   renderBody();
 }
